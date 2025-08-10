@@ -149,23 +149,21 @@
             <div class="login-subtitle">Professional Financial Markets Dashboard</div>
         </div>
 
-        <form id="loginForm" method="POST" action="/auth/login" onsubmit="return false;">
-            <div class="form-group">
-                <label class="form-label" for="username">Username:</label>
-                <input type="text" id="username" name="username" class="form-input" required autocomplete="username">
-            </div>
+        <div class="form-group">
+            <label class="form-label" for="username">Username:</label>
+            <input type="text" id="username" name="username" class="form-input" required autocomplete="username">
+        </div>
 
-            <div class="form-group">
-                <label class="form-label" for="password">Password:</label>
-                <input type="password" id="password" name="password" class="form-input" required autocomplete="current-password">
-            </div>
+        <div class="form-group">
+            <label class="form-label" for="password">Password:</label>
+            <input type="password" id="password" name="password" class="form-input" required autocomplete="current-password">
+        </div>
 
-            <button type="button" class="login-button" id="loginButton">
-                ACCESS TERMINAL
-            </button>
+        <button type="button" class="login-button" id="loginButton">
+            ACCESS TERMINAL
+        </button>
 
-            <div id="message"></div>
-        </form>
+        <div id="message"></div>
 
         <div class="security-notice">
             AUTHORIZED ACCESS ONLY<br>
@@ -178,6 +176,122 @@
         </div>
     </div>
 
-    <script src="login.js"></script>
+    <script>
+        (function() {
+            'use strict';
+            
+            function handleLogin() {
+                var username = document.getElementById('username').value.trim();
+                var password = document.getElementById('password').value;
+                var button = document.getElementById('loginButton');
+                var message = document.getElementById('message');
+
+                if (!username || !password) {
+                    message.innerHTML = '<div class="error-message">USERNAME AND PASSWORD REQUIRED</div>';
+                    return;
+                }
+
+                button.disabled = true;
+                button.textContent = 'AUTHENTICATING...';
+                message.innerHTML = '<div class="loading">VERIFYING CREDENTIALS...</div>';
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '/auth/login', true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.setRequestHeader('Accept', 'application/json');
+
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            try {
+                                var data = JSON.parse(xhr.responseText);
+                                if (data.success) {
+                                    message.innerHTML = '<div class="success-message">ACCESS GRANTED - LOADING PFAFF TERMINAL...</div>';
+                                    setTimeout(function() {
+                                        window.location.href = '/dashboard';
+                                    }, 1500);
+                                } else {
+                                    message.innerHTML = '<div class="error-message">' + (data.error || 'ACCESS DENIED') + '</div>';
+                                    button.disabled = false;
+                                    button.textContent = 'ACCESS TERMINAL';
+                                    document.getElementById('password').value = '';
+                                }
+                            } catch (e) {
+                                message.innerHTML = '<div class="error-message">INVALID SERVER RESPONSE</div>';
+                                button.disabled = false;
+                                button.textContent = 'ACCESS TERMINAL';
+                            }
+                        } else {
+                            message.innerHTML = '<div class="error-message">CONNECTION ERROR - PLEASE TRY AGAIN</div>';
+                            button.disabled = false;
+                            button.textContent = 'ACCESS TERMINAL';
+                            document.getElementById('password').value = '';
+                        }
+                    }
+                };
+
+                xhr.send(JSON.stringify({
+                    username: username,
+                    password: password
+                }));
+            }
+
+            function clearMessage() {
+                var message = document.getElementById('message');
+                if (message) {
+                    message.innerHTML = '';
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('Pfaff Terminal Login - Ready');
+                
+                var loginButton = document.getElementById('loginButton');
+                var usernameField = document.getElementById('username');
+                var passwordField = document.getElementById('password');
+
+                if (loginButton) {
+                    loginButton.addEventListener('click', handleLogin);
+                }
+                
+                if (usernameField) {
+                    usernameField.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleLogin();
+                        }
+                    });
+                    usernameField.addEventListener('input', clearMessage);
+                }
+                
+                if (passwordField) {
+                    passwordField.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault(); 
+                            handleLogin();
+                        }
+                    });
+                    passwordField.addEventListener('input', clearMessage);
+                }
+
+                // Check if already authenticated
+                var authCheck = new XMLHttpRequest();
+                authCheck.open('GET', '/auth/status', true);
+                authCheck.onreadystatechange = function() {
+                    if (authCheck.readyState === 4 && authCheck.status === 200) {
+                        try {
+                            var data = JSON.parse(authCheck.responseText);
+                            if (data.authenticated) {
+                                window.location.href = '/dashboard';
+                            }
+                        } catch (e) {
+                            // Ignore auth check errors
+                        }
+                    }
+                };
+                authCheck.send();
+            });
+        })();
+    </script>
 </body>
 </html>

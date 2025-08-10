@@ -71,7 +71,7 @@
                 </div>
                 <div class="terminal-content">
                     <div class="market-grid" id="marketSummary">
-                        <!-- Market data will be populated here -->
+                        <div class="loading">LOADING PFAFF MARKET DATA</div>
                     </div>
                 </div>
             </div>
@@ -81,4 +81,92 @@
                 <div class="terminal-header">
                     <span class="terminal-title">PFAFF WATCHLIST - LIVE QUOTES</span>
                     <div class="terminal-controls">
-                        <button class="terminal-btn btn-minimi
+                        <button class="terminal-btn btn-minimize"></button>
+                        <button class="terminal-btn btn-maximize"></button>
+                        <button class="terminal-btn btn-close"></button>
+                    </div>
+                </div>
+                <div class="terminal-content">
+                    <div class="watchlist-header">
+                        <div style="display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; font-size: 0.7rem; color: #888; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 4px;">
+                            <span>SYMBOL</span>
+                            <span>PRICE</span>
+                            <span>CHANGE</span>
+                            <span>VOLUME</span>
+                        </div>
+                    </div>
+                    <div id="stockList">
+                        <div class="loading">LOADING PFAFF WATCHLIST</div>
+                    </div>
+                    
+                    <div class="watchlist-section" style="margin-top: 15px;">
+                        <div class="section-title" style="color: #ffb700; font-size: 0.8rem; border-bottom: 1px solid #333; padding-bottom: 2px; margin-bottom: 4px;">ETFs</div>
+                        <div id="etfList">
+                            <div class="loading">LOADING ETF DATA</div>
+                        </div>
+                    </div>
+                    
+                    <div class="watchlist-section" style="margin-top: 15px;">
+                        <div class="section-title" style="color: #ffb700; font-size: 0.8rem; border-bottom: 1px solid #333; padding-bottom: 2px; margin-bottom: 4px;">CRYPTO</div>
+                        <div id="cryptoList">
+                            <div class="loading">LOADING CRYPTO DATA</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Terminal -->
+            <div class="terminal-window search-terminal">
+                <div class="terminal-header">
+                    <span class="terminal-title">PFAFF SEARCH & ANALYSIS</span>
+                    <div class="terminal-controls">
+                        <button class="terminal-btn btn-minimize"></button>
+                        <button class="terminal-btn btn-maximize"></button>
+                        <button class="terminal-btn btn-close"></button>
+                    </div>
+                </div>
+                <div class="terminal-content">
+                    <div class="search-form">
+                        <input type="text" id="symbolInput" class="search-input" placeholder="ENTER SYMBOL..." maxlength="10">
+                        <button id="searchBtn" class="terminal-search-btn" style="width: 100%; margin-top: 4px;">SEARCH</button>
+                    </div>
+                    
+                    <div class="search-buttons">
+                        <button id="fundamentalsBtn" class="terminal-search-btn">FUNDAMENTALS</button>
+                        <button id="technicalBtn" class="terminal-search-btn">TECHNICAL</button>
+                        <button id="sectorBtn" class="terminal-search-btn">SECTOR</button>
+                        <button class="terminal-search-btn">OPTIONS</button>
+                    </div>
+                    
+                    <div id="searchResult"></div>
+                    <div id="fundamentalsResult"></div>
+                    <div id="technicalResult"></div>
+                    <div id="sectorResult"></div>
+                </div>
+            </div>
+
+            <!-- News Terminal -->
+            <div class="terminal-window news-terminal">
+                <div class="terminal-header">
+                    <span class="terminal-title">PFAFF NEWS FEED - LIVE MARKET NEWS</span>
+                    <div class="terminal-controls">
+                        <button class="terminal-btn btn-minimize"></button>
+                        <button class="terminal-btn btn-maximize"></button>
+                        <button class="terminal-btn btn-close"></button>
+                    </div>
+                </div>
+                <div class="terminal-content">
+                    <div class="news-ticker">
+                        <div class="news-scroll" id="newsTicker">PFAFF TERMINAL - LOADING LIVE MARKET NEWS FEED...</div>
+                    </div>
+                    <div class="news-list" id="newsList">
+                        <div class="loading">LOADING PFAFF NEWS FEED</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

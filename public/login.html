@@ -149,7 +149,7 @@
             <div class="login-subtitle">Professional Financial Markets Dashboard</div>
         </div>
 
-        <form id="loginForm">
+        <form id="loginForm" method="POST" action="/auth/login" onsubmit="return false;">
             <div class="form-group">
                 <label class="form-label" for="username">Username:</label>
                 <input type="text" id="username" name="username" class="form-input" required autocomplete="username">
@@ -160,7 +160,7 @@
                 <input type="password" id="password" name="password" class="form-input" required autocomplete="current-password">
             </div>
 
-            <button type="submit" class="login-button" id="loginButton">
+            <button type="button" class="login-button" id="loginButton">
                 ACCESS TERMINAL
             </button>
 
@@ -179,91 +179,188 @@
     </div>
 
     <script>
+        // Wait for page to load completely
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('Pfaff Terminal Login - Initializing...');
+            
             // Check if already authenticated
-            fetch('/auth/status')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.authenticated) {
-                        window.location.href = '/dashboard';
+            checkAuthStatus();
+            
+            // Set up login button handler
+            const loginButton = document.getElementById('loginButton');
+            const loginForm = document.getElementById('loginForm');
+            
+            if (loginButton) {
+                loginButton.addEventListener('click', handleLogin);
+            }
+            
+            // Handle Enter key in form fields
+            const usernameField = document.getElementById('username');
+            const passwordField = document.getElementById('password');
+            
+            if (usernameField) {
+                usernameField.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleLogin();
                     }
-                })
-                .catch(() => {
-                    // Ignore errors, just continue with login form
+                });
+            }
+            
+            if (passwordField) {
+                passwordField.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleLogin();
+                    }
+                });
+            }
+            
+            // Clear messages when typing
+            if (usernameField) {
+                usernameField.addEventListener('input', clearMessages);
+            }
+            if (passwordField) {
+                passwordField.addEventListener('input', clearMessages);
+            }
+        });
+
+        async function checkAuthStatus() {
+            try {
+                const response = await fetch('/auth/status', {
+                    method: 'GET',
+                    credentials: 'same-origin'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.authenticated) {
+                        console.log('Already authenticated, redirecting...');
+                        window.location.href = '/dashboard';
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.log('Auth check failed, continuing with login form');
+            }
+        }
+
+        async function handleLogin() {
+            console.log('Login attempt started...');
+            
+            const button = document.getElementById('loginButton');
+            const message = document.getElementById('message');
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            // Validate inputs
+            if (!username || !password) {
+                showMessage('USERNAME AND PASSWORD REQUIRED', 'error');
+                return;
+            }
+
+            // Disable form and show loading
+            setFormState(true);
+            showMessage('VERIFYING CREDENTIALS...', 'loading');
+
+            try {
+                console.log('Sending login request...');
+                
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        username: username, 
+                        password: password 
+                    }),
+                    credentials: 'same-origin'
                 });
 
-            // Handle form submission
-            document.getElementById('loginForm').addEventListener('submit', async function(e) {
-                e.preventDefault();
+                console.log('Login response status:', response.status);
                 
-                const button = document.getElementById('loginButton');
-                const message = document.getElementById('message');
-                const username = document.getElementById('username').value.trim();
-                const password = document.getElementById('password').value;
-
-                // Validate inputs
-                if (!username || !password) {
-                    message.innerHTML = '<div class="error-message">USERNAME AND PASSWORD REQUIRED</div>';
-                    return;
-                }
-
-                // Disable button and show loading
-                button.disabled = true;
-                button.textContent = 'AUTHENTICATING...';
-                message.innerHTML = '<div class="loading">VERIFYING CREDENTIALS...</div>';
-
+                let data;
                 try {
-                    const response = await fetch('/auth/login', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify({ 
-                            username: username, 
-                            password: password 
-                        }),
-                        credentials: 'same-origin'
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok && data.success) {
-                        message.innerHTML = '<div class="success-message">ACCESS GRANTED - LOADING PFAFF TERMINAL...</div>';
-                        
-                        // Small delay for user feedback, then redirect
-                        setTimeout(() => {
-                            window.location.href = '/dashboard';
-                        }, 1500);
-                    } else {
-                        // Login failed
-                        message.innerHTML = `<div class="error-message">${data.error || 'ACCESS DENIED - INVALID CREDENTIALS'}</div>`;
-                        button.disabled = false;
-                        button.textContent = 'ACCESS TERMINAL';
-                        
-                        // Clear password field for security
-                        document.getElementById('password').value = '';
-                    }
-                } catch (error) {
-                    console.error('Login error:', error);
-                    message.innerHTML = '<div class="error-message">CONNECTION ERROR - PLEASE TRY AGAIN</div>';
-                    button.disabled = false;
-                    button.textContent = 'ACCESS TERMINAL';
-                    
-                    // Clear password field for security
-                    document.getElementById('password').value = '';
+                    data = await response.json();
+                } catch (parseError) {
+                    console.error('Failed to parse response JSON:', parseError);
+                    throw new Error('Invalid server response');
                 }
-            });
 
-            // Clear any error messages when user starts typing
-            document.getElementById('username').addEventListener('input', function() {
-                document.getElementById('message').innerHTML = '';
-            });
+                if (response.ok && data.success) {
+                    console.log('Login successful!');
+                    showMessage('ACCESS GRANTED - LOADING PFAFF TERMINAL...', 'success');
+                    
+                    // Redirect after brief delay
+                    setTimeout(() => {
+                        console.log('Redirecting to dashboard...');
+                        window.location.href = '/dashboard';
+                    }, 1500);
+                } else {
+                    console.log('Login failed:', data.error);
+                    showMessage(data.error || 'ACCESS DENIED - INVALID CREDENTIALS', 'error');
+                    setFormState(false);
+                    clearPasswordField();
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showMessage('CONNECTION ERROR - PLEASE TRY AGAIN', 'error');
+                setFormState(false);
+                clearPasswordField();
+            }
+        }
 
-            document.getElementById('password').addEventListener('input', function() {
-                document.getElementById('message').innerHTML = '';
-            });
-        });
+        function showMessage(text, type) {
+            const message = document.getElementById('message');
+            if (!message) return;
+            
+            let className = '';
+            switch(type) {
+                case 'error':
+                    className = 'error-message';
+                    break;
+                case 'success':
+                    className = 'success-message';
+                    break;
+                case 'loading':
+                    className = 'loading';
+                    break;
+                default:
+                    className = 'error-message';
+            }
+            
+            message.innerHTML = `<div class="${className}">${text}</div>`;
+        }
+
+        function clearMessages() {
+            const message = document.getElementById('message');
+            if (message) {
+                message.innerHTML = '';
+            }
+        }
+
+        function setFormState(disabled) {
+            const button = document.getElementById('loginButton');
+            const username = document.getElementById('username');
+            const password = document.getElementById('password');
+            
+            if (button) {
+                button.disabled = disabled;
+                button.textContent = disabled ? 'AUTHENTICATING...' : 'ACCESS TERMINAL';
+            }
+            
+            if (username) username.disabled = disabled;
+            if (password) password.disabled = disabled;
+        }
+
+        function clearPasswordField() {
+            const password = document.getElementById('password');
+            if (password) {
+                password.value = '';
+            }
+        }
     </script>
 </body>
 </html>

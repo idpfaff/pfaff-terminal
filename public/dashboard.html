@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PFAFF TERMINAL - Financial Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link href="style.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Pfaff Terminal Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1><i class="fas fa-chart-line"></i> PFAFF TERMINAL</h1>
+            </div>
+            <div class="header-info">
+                <div class="time-display" id="currentTime"></div>
+                <div class="last-updated" id="lastUpdated">INITIALIZING...</div>
+                <div class="realtime-status" id="realtimeStatus">
+                    <span class="status-dot status-disconnected"></span>
+                    <span id="wsStatus">OFFLINE</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Terminal Grid Layout -->
+        <div class="terminal-grid">
+            <!-- Main Chart Window -->
+            <div class="terminal-window main-chart">
+                <div class="terminal-header">
+                    <span class="terminal-title">PFAFF MARKETS - REAL TIME CHARTS</span>
+                    <div class="terminal-controls">
+                        <button class="terminal-btn btn-minimize"></button>
+                        <button class="terminal-btn btn-maximize"></button>
+                        <button class="terminal-btn btn-close"></button>
+                    </div>
+                </div>
+                <div class="terminal-content">
+                    <div class="chart-container">
+                        <div class="chart-controls" style="margin-bottom: 8px;">
+                            <select id="chartSymbol" class="search-input" style="width: 120px; display: inline-block; margin-right: 8px;">
+                                <option value="AAPL">AAPL</option>
+                                <option value="GOOGL">GOOGL</option>
+                                <option value="MSFT">MSFT</option>
+                                <option value="TSLA">TSLA</option>
+                                <option value="SPY">SPY</option>
+                            </select>
+                            <select id="chartPeriod" class="search-input" style="width: 100px; display: inline-block;">
+                                <option value="1W">1W</option>
+                                <option value="1M" selected>1M</option>
+                                <option value="3M">3M</option>
+                                <option value="1Y">1Y</option>
+                            </select>
+                        </div>
+                        <canvas id="priceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market Overview -->
+            <div class="terminal-window market-overview">
+                <div class="terminal-header">
+                    <span class="terminal-title">PFAFF MARKET OVERVIEW</span>
+                    <div class="terminal-controls">
+                        <button class="terminal-btn btn-minimize"></button>
+                        <button class="terminal-btn btn-maximize"></button>
+                        <button class="terminal-btn btn-close"></button>
+                    </div>
+                </div>
+                <div class="terminal-content">
+                    <div class="market-grid" id="marketSummary">
+                        <!-- Market data will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Watchlist -->
+            <div class="terminal-window watchlist">
+                <div class="terminal-header">
+                    <span class="terminal-title">PFAFF WATCHLIST - LIVE QUOTES</span>
+                    <div class="terminal-controls">
+                        <button class="terminal-btn btn-minimi

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PFAFF TERMINAL - LOGIN</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', 'Monaco', 'Lucida Console', monospace;
+            background: #000814;
+            color: #ffb700;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            background: #0a1628;
+            border: 2px solid #ffb700;
+            padding: 40px;
+            border-radius: 0;
+            min-width: 400px;
+            box-shadow: 0 0 20px rgba(255, 183, 0, 0.3);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #ffb700;
+            padding-bottom: 20px;
+        }
+
+        .login-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #ffb700;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+
+        .login-subtitle {
+            font-size: 0.9rem;
+            color: #888;
+            text-transform: uppercase;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ffb700;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            background: #000814;
+            border: 1px solid #ffb700;
+            color: #ffb700;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #00ff41;
+            box-shadow: 0 0 5px rgba(0, 255, 65, 0.3);
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 15px;
+            background: #ffb700;
+            color: #000814;
+            border: none;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+
+        .login-button:hover {
+            background: #00ff41;
+        }
+
+        .login-button:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            color: #ff4757;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .success-message {
+            color: #00ff41;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .loading {
+            text-align: center;
+            margin-top: 10px;
+            color: #888;
+        }
+
+        .security-notice {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+            font-size: 0.8rem;
+            color: #666;
+            text-align: center;
+        }
+
+        .pfaff-branding {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 0.7rem;
+            color: #444;
+            border-top: 1px solid #333;
+            padding-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <div class="login-title">PFAFF TERMINAL</div>
+            <div class="login-subtitle">Professional Financial Markets Dashboard</div>
+        </div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label class="form-label" for="username">Username:</label>
+                <input type="text" id="username" name="username" class="form-input" required autocomplete="username">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="password">Password:</label>
+                <input type="password" id="password" name="password" class="form-input" required autocomplete="current-password">
+            </div>
+
+            <button type="submit" class="login-button" id="loginButton">
+                ACCESS TERMINAL
+            </button>
+
+            <div id="message"></div>
+        </form>
+
+        <div class="security-notice">
+            AUTHORIZED ACCESS ONLY<br>
+            ALL SESSIONS ARE MONITORED AND LOGGED
+        </div>
+
+        <div class="pfaff-branding">
+            PFAFF TERMINAL v1.0 - PROPRIETARY FINANCIAL SYSTEM<br>
+            POWERED BY TIINGO PROFESSIONAL DATA FEEDS
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const button = document.getElementById('loginButton');
+            const message = document.getElementById('message');
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            button.disabled = true;
+            button.textContent = 'AUTHENTICATING...';
+            message.innerHTML = '<div class="loading">VERIFYING CREDENTIALS...</div>';
+
+            try {
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    message.innerHTML = '<div class="success-message">ACCESS GRANTED - LOADING PFAFF TERMINAL...</div>';
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1500);
+                } else {
+                    message.innerHTML = `<div class="error-message">${data.error || 'ACCESS DENIED'}</div>`;
+                    button.disabled = false;
+                    button.textContent = 'ACCESS TERMINAL';
+                }
+            } catch (error) {
+                message.innerHTML = '<div class="error-message">CONNECTION ERROR - PLEASE TRY AGAIN</div>';
+                button.disabled = false;
+                button.textContent = 'ACCESS TERMINAL';
+            }
+        });
+
+        // Check if already authenticated
+        fetch('/auth/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.authenticated) {
+                    window.location.href = '/dashboard';
+                }
+            })
+            .catch(() => {});
+    </script>
+</body>
+</html>

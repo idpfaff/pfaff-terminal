@@ -174,6 +174,11 @@ app.get('/api/health/tiingo', async (_req, res) => {
    (keep or adapt to your UI)
 --------------------------- */
 
+// Expose API token to authenticated clients for websocket usage
+app.get('/api/tiingo/token', (_req, res) => {
+  res.json({ token: tiingoToken });
+});
+
 // Daily/EOD prices
 app.get('/api/tiingo/daily/:ticker/prices', async (req, res) => {
   const { ticker } = req.params;
@@ -189,7 +194,19 @@ app.get('/api/tiingo/daily/:ticker/prices', async (req, res) => {
   }
 });
 
-// IEX real-time/last price
+// IEX real-time/last price for multiple tickers
+app.get('/api/tiingo/iex', async (req, res) => {
+  try {
+    const r = await tiingo.get('/iex', { params: req.query });
+    res.json(r.data);
+  } catch (err) {
+    const status = err?.response?.status;
+    console.error('Tiingo IEX error:', status, err?.message);
+    res.status(status || 500).json(err?.response?.data || { error: err?.message });
+  }
+});
+
+// IEX real-time/last price for a specific ticker
 app.get('/api/tiingo/iex/:ticker', async (req, res) => {
   const { ticker } = req.params;
   try {
@@ -217,6 +234,57 @@ app.get('/api/tiingo/news', async (req, res) => {
   }
 });
 
+// Forex top-of-book / last price (multiple tickers)
+app.get('/api/tiingo/fx/top', async (req, res) => {
+  try {
+    const r = await tiingo.get('/tiingo/fx/top', { params: req.query });
+    res.json(r.data);
+  } catch (err) {
+    const status = err?.response?.status;
+    console.error('Tiingo FX top error:', status, err?.message);
+    res.status(status || 500).json(err?.response?.data || { error: err?.message });
+  }
+});
+
+// Forex top-of-book / last price for a specific pair
+app.get('/api/tiingo/fx/:ticker/top', async (req, res) => {
+  const { ticker } = req.params;
+  try {
+    const r = await tiingo.get(`/tiingo/fx/${encodeURIComponent(ticker)}/top`, {
+      params: req.query,
+    });
+    res.json(r.data);
+  } catch (err) {
+    const status = err?.response?.status;
+    console.error('Tiingo FX pair error:', status, err?.message);
+    res.status(status || 500).json(err?.response?.data || { error: err?.message });
+  }
+});
+
+// Generic crypto prices (supports intraday/historical queries)
+app.get('/api/tiingo/crypto/prices', async (req, res) => {
+  try {
+    const r = await tiingo.get('/tiingo/crypto/prices', { params: req.query });
+    res.json(r.data);
+  } catch (err) {
+    const status = err?.response?.status;
+    console.error('Tiingo crypto prices error:', status, err?.message);
+    res.status(status || 500).json(err?.response?.data || { error: err?.message });
+  }
+});
+
+// Fundamental definitions
+app.get('/api/tiingo/fundamentals/definitions', async (_req, res) => {
+  try {
+    const r = await tiingo.get('/tiingo/fundamentals/definitions');
+    res.json(r.data);
+  } catch (err) {
+    const status = err?.response?.status;
+    console.error('Tiingo fundamentals error:', status, err?.message);
+    res.status(status || 500).json(err?.response?.data || { error: err?.message });
+  }
+});
+
 /* ---------------------------
    Frontend helper APIs
 --------------------------- */
@@ -230,6 +298,8 @@ app.get('/api/health', (_req, res) => {
       stocks: true,
       crypto: true,
       news: true,
+      forex: true,
+      fundamentals: true,
     },
   });
 });
@@ -343,10 +413,34 @@ app.get('/api/crypto', async (_req, res) => {
   }
 });
 
-// News articles
-app.get('/api/news', async (_req, res) => {
+// Basic forex prices
+app.get('/api/fx', async (_req, res) => {
   try {
-    const r = await tiingo.get('/tiingo/news', { params: { limit: 20 } });
+    const tickers = 'eurusd,gbpusd,usdjpy';
+    const r = await tiingo.get('/tiingo/fx/top', { params: { tickers } });
+    const fx = {};
+    (r.data || []).forEach((q) => {
+      const symbol = (q.ticker || '').toUpperCase();
+      fx[symbol] = {
+        symbol,
+        price: q.midPrice ?? q.lastPrice,
+        bid: q.bidPrice,
+        ask: q.askPrice,
+      };
+    });
+    res.json({ dataSource: 'tiingo', fx });
+  } catch (err) {
+    const status = err?.response?.status;
+    console.error('Forex API error:', status, err?.message);
+    res.status(status || 500).json({ error: err?.message });
+  }
+});
+
+// News articles
+app.get('/api/news', async (req, res) => {
+  try {
+    const params = { limit: 20, ...req.query };
+    const r = await tiingo.get('/tiingo/news', { params });
     res.json({ dataSource: 'tiingo', news: r.data });
   } catch (err) {
     const status = err?.response?.status;

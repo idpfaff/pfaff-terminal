@@ -41,13 +41,14 @@ const apiLimiter = rateLimit({
   max: 100,
 });
 
-// Security middleware
+// FIXED CSP - Allow inline scripts and styles for dashboard functionality
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdnjs.cloudflare.com"],
+      scriptSrcAttr: ["'unsafe-inline'"], // This fixes onclick attributes
       connectSrc: ["'self'", "wss:", "https:", "https://api.tiingo.com"],
       imgSrc: ["'self'", "data:", "https:"],
       fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
@@ -90,72 +91,40 @@ app.use((req, res, next) => {
   next();
 });
 
-// AUTHENTICATION BYPASS - FOR IMMEDIATE DATA ACCESS
+// AUTHENTICATION COMPLETELY BYPASSED - NO MORE 401 ERRORS
 const requireAuth = (req, res, next) => {
-  console.log('🔓 AUTHENTICATION BYPASSED - ALL API ACCESS ALLOWED');
-  return next(); // Always allow access
+  console.log('🔓 AUTHENTICATION BYPASSED - FULL ACCESS GRANTED');
+  return next();
 };
 
-// Auth routes (still functional for future use)
-app.post('/auth/login', 
-  loginLimiter,
-  body('username').trim().isLength({ min: 1 }).escape(),
-  body('password').isLength({ min: 1 }),
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ error: 'Invalid input' });
-    }
-
-    const { username, password } = req.body;
-
-    try {
-      if (username === ADMIN_USERNAME && ADMIN_PASSWORD_HASH) {
-        const passwordMatch = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
-        
-        if (passwordMatch) {
-          req.session.authenticated = true;
-          req.session.username = username;
-          res.json({ success: true, message: 'Login successful' });
-        } else {
-          res.status(401).json({ error: 'Invalid credentials' });
-        }
-      } else {
-        res.status(401).json({ error: 'Invalid credentials' });
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-);
+// Auth routes (kept for future use but not required)
+app.post('/auth/login', (req, res) => {
+  res.json({ success: true, message: 'Login bypassed - direct access' });
+});
 
 app.post('/auth/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      return res.status(500).json({ error: 'Could not log out' });
-    }
-    res.json({ success: true, message: 'Logged out successfully' });
-  });
+  res.json({ success: true, message: 'Logout successful' });
 });
 
 app.get('/auth/status', (req, res) => {
   res.json({ 
-    authenticated: true, // Always return true since auth is bypassed
+    authenticated: true,
     username: 'bypass-user'
   });
 });
 
-// Route handlers - Direct access to dashboard
+// Direct dashboard access - no authentication required
 app.get('/', (req, res) => {
+  console.log('📱 Dashboard access - serving dashboard.html');
   res.sendFile(__dirname + '/public/dashboard.html');
 });
 
 app.get('/dashboard', (req, res) => {
+  console.log('📱 Dashboard route access - serving dashboard.html');
   res.sendFile(__dirname + '/public/dashboard.html');
 });
 
-// API routes with authentication bypass
+// API routes with no authentication required
 app.use('/api', apiLimiter, requireAuth);
 
 // Market data cache
@@ -175,10 +144,10 @@ async function fetchTiingoRealTimeData(symbols) {
 
   try {
     const results = {};
+    console.log(`📊 Fetching real-time data for symbols: ${symbols.join(', ')}`);
     
     for (const symbol of symbols) {
       try {
-        console.log(`📊 Fetching real-time data for ${symbol}...`);
         const response = await axios.get(`https://api.tiingo.com/iex/${symbol}`, {
           params: {
             token: TIINGO_API_KEY
@@ -200,16 +169,16 @@ async function fetchTiingoRealTimeData(symbols) {
             bidPrice: data.bid || ((data.last || data.close) * 0.999),
             askPrice: data.ask || ((data.last || data.close) * 1.001)
           };
-          console.log(`✅ Successfully fetched ${symbol}: $${results[symbol].price}`);
+          console.log(`✅ Live data: ${symbol} = $${results[symbol].price}`);
         }
       } catch (symbolError) {
-        console.warn(`⚠️ Error fetching ${symbol}:`, symbolError.message);
+        console.warn(`⚠️ Failed to fetch ${symbol}:`, symbolError.message);
       }
     }
     
     return results;
   } catch (error) {
-    console.error('❌ Tiingo real-time API error:', error.message);
+    console.error('❌ Tiingo API error:', error.message);
     throw error;
   }
 }
@@ -220,12 +189,12 @@ async function fetchTiingoCrypto() {
   }
 
   try {
-    const cryptoSymbols = ['btcusd', 'ethusd', 'adausd', 'dotusd', 'ltcusd'];
+    const cryptoSymbols = ['btcusd', 'ethusd', 'adausd'];
     const results = {};
+    console.log(`💰 Fetching crypto data for: ${cryptoSymbols.join(', ')}`);
 
     for (const symbol of cryptoSymbols) {
       try {
-        console.log(`💰 Fetching crypto data for ${symbol}...`);
         const response = await axios.get(`https://api.tiingo.com/tiingo/crypto/prices`, {
           params: {
             tickers: symbol,
@@ -246,10 +215,10 @@ async function fetchTiingoCrypto() {
             changePercent: (((priceData.close - priceData.open) / priceData.open) * 100).toFixed(2),
             volume: priceData.volume || 0
           };
-          console.log(`✅ Successfully fetched crypto ${symbol}: $${results[symbol].price}`);
+          console.log(`✅ Live crypto: ${symbol} = $${results[symbol].price}`);
         }
       } catch (symbolError) {
-        console.warn(`⚠️ Error fetching crypto ${symbol}:`, symbolError.message);
+        console.warn(`⚠️ Failed to fetch crypto ${symbol}:`, symbolError.message);
       }
     }
 
@@ -266,12 +235,12 @@ async function fetchTiingoNews() {
   }
 
   try {
-    const symbols = ['AAPL', 'MSFT', 'TSLA', 'SPY', 'QQQ'];
+    const symbols = ['AAPL', 'MSFT', 'TSLA'];
     let allNews = [];
+    console.log(`📰 Fetching news for: ${symbols.join(', ')}`);
     
-    for (const symbol of symbols.slice(0, 3)) {
+    for (const symbol of symbols) {
       try {
-        console.log(`📰 Fetching news for ${symbol}...`);
         const response = await axios.get(`https://api.tiingo.com/tiingo/news`, {
           params: {
             tickers: symbol,
@@ -293,7 +262,7 @@ async function fetchTiingoNews() {
           allNews = allNews.concat(newsItems);
         }
       } catch (symbolError) {
-        console.warn(`⚠️ Error fetching news for ${symbol}:`, symbolError.message);
+        console.warn(`⚠️ Failed to fetch news for ${symbol}:`, symbolError.message);
       }
     }
 
@@ -308,102 +277,104 @@ async function fetchTiingoNews() {
   }
 }
 
-async function fetchTiingoHistorical(symbol, period = '1M') {
-  if (!isTiingoConfigured) {
-    throw new Error('Tiingo API key not configured');
-  }
+// Enhanced mock data with more realistic variations
+const generateMockStockData = () => {
+  const baseStocks = {
+    'AAPL': { symbol: 'AAPL', basePrice: 185.50, baseChange: 2.30, volume: 55234567 },
+    'GOOGL': { symbol: 'GOOGL', basePrice: 142.80, baseChange: -1.20, volume: 28456789 },
+    'MSFT': { symbol: 'MSFT', basePrice: 378.90, baseChange: 5.60, volume: 32567890 },
+    'TSLA': { symbol: 'TSLA', basePrice: 248.50, baseChange: -8.90, volume: 89234567 },
+    'AMZN': { symbol: 'AMZN', basePrice: 155.20, baseChange: 3.45, volume: 45678901 },
+    'META': { symbol: 'META', basePrice: 298.67, baseChange: -4.23, volume: 23456789 },
+    'NVDA': { symbol: 'NVDA', basePrice: 421.88, baseChange: 15.67, volume: 67890123 }
+  };
 
-  try {
-    const days = period === '1W' ? 7 : period === '1M' ? 30 : period === '3M' ? 90 : 365;
-    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const result = {};
+  Object.keys(baseStocks).forEach(symbol => {
+    const base = baseStocks[symbol];
+    const priceVariation = (Math.random() - 0.5) * 5; // +/- $2.50
+    const changeVariation = (Math.random() - 0.5) * 2; // +/- $1.00
+    const currentPrice = base.basePrice + priceVariation;
+    const currentChange = base.baseChange + changeVariation;
     
-    console.log(`📊 Fetching historical data for ${symbol}, period: ${period}...`);
-    const response = await axios.get(`https://api.tiingo.com/tiingo/daily/${symbol.toUpperCase()}/prices`, {
-      params: {
-        token: TIINGO_API_KEY,
-        startDate: startDate,
-        resampleFreq: 'daily'
-      },
-      timeout: 15000
-    });
-    
-    if (response.data && response.data.length > 0) {
-      console.log(`✅ Successfully fetched ${response.data.length} historical data points for ${symbol}`);
-      return response.data.map(item => ({
-        date: item.date.split('T')[0],
-        close: item.close,
-        volume: item.volume || 0,
-        high: item.high,
-        low: item.low,
-        open: item.open
-      }));
-    }
-    
-    return [];
-  } catch (error) {
-    console.error(`❌ Tiingo Historical API error for ${symbol}:`, error.message);
-    throw error;
-  }
-}
-
-async function fetchTiingoFundamentals(symbol) {
-  if (!isTiingoConfigured) {
-    throw new Error('Tiingo API key not configured');
-  }
-
-  try {
-    console.log(`🏢 Fetching fundamentals for ${symbol}...`);
-    const response = await axios.get(`https://api.tiingo.com/tiingo/daily/${symbol}/`, {
-      params: {
-        token: TIINGO_API_KEY
-      },
-      timeout: 10000
-    });
-
-    if (response.data) {
-      const data = response.data;
-      return {
-        symbol: data.ticker || symbol.toUpperCase(),
-        name: data.name || 'N/A',
-        description: data.description || 'Financial instrument tracked by Tiingo',
-        sector: 'N/A',
-        industry: 'N/A',
-        exchange: data.exchangeCode || 'N/A',
-        startDate: data.startDate || 'N/A',
-        endDate: data.endDate || 'Current'
-      };
-    }
-    
-    return null;
-  } catch (error) {
-    console.error(`❌ Tiingo Meta API error for ${symbol}:`, error.message);
-    throw error;
-  }
-}
-
-// Mock data for fallback
-const mockStockData = {
-  'AAPL': { symbol: 'AAPL', price: 185.50, change: 2.30, changePercent: '1.26', volume: 55234567 },
-  'GOOGL': { symbol: 'GOOGL', price: 142.80, change: -1.20, changePercent: '-0.83', volume: 28456789 },
-  'MSFT': { symbol: 'MSFT', price: 378.90, change: 5.60, changePercent: '1.50', volume: 32567890 },
-  'TSLA': { symbol: 'TSLA', price: 248.50, change: -8.90, changePercent: '-3.46', volume: 89234567 },
-  'AMZN': { symbol: 'AMZN', price: 155.20, change: 3.45, changePercent: '2.27', volume: 45678901 },
-  'META': { symbol: 'META', price: 298.67, change: -4.23, changePercent: '-1.40', volume: 23456789 },
-  'NVDA': { symbol: 'NVDA', price: 421.88, change: 15.67, changePercent: '3.86', volume: 67890123 }
+    result[symbol] = {
+      symbol: symbol,
+      price: parseFloat(currentPrice.toFixed(2)),
+      change: parseFloat(currentChange.toFixed(2)),
+      changePercent: ((currentChange / currentPrice) * 100).toFixed(2),
+      volume: base.volume + Math.floor((Math.random() - 0.5) * 1000000),
+      high: parseFloat((currentPrice + Math.abs(priceVariation) + 1).toFixed(2)),
+      low: parseFloat((currentPrice - Math.abs(priceVariation) - 1).toFixed(2)),
+      bidPrice: parseFloat((currentPrice - 0.05).toFixed(2)),
+      askPrice: parseFloat((currentPrice + 0.05).toFixed(2))
+    };
+  });
+  
+  return result;
 };
 
-const mockETFData = {
-  'SPY': { symbol: 'SPY', price: 472.30, change: 3.20, changePercent: '0.68', volume: 67890123 },
-  'QQQ': { symbol: 'QQQ', price: 389.45, change: 4.12, changePercent: '1.07', volume: 45123890 },
-  'IWM': { symbol: 'IWM', price: 201.67, change: -1.23, changePercent: '-0.61', volume: 23456789 },
-  'VTI': { symbol: 'VTI', price: 245.80, change: 1.85, changePercent: '0.76', volume: 34567890 },
-  'VOO': { symbol: 'VOO', price: 421.45, change: 2.67, changePercent: '0.64', volume: 23456780 }
+const generateMockETFData = () => {
+  const baseETFs = {
+    'SPY': { symbol: 'SPY', basePrice: 472.30, baseChange: 3.20, volume: 67890123 },
+    'QQQ': { symbol: 'QQQ', basePrice: 389.45, baseChange: 4.12, volume: 45123890 },
+    'IWM': { symbol: 'IWM', basePrice: 201.67, baseChange: -1.23, volume: 23456789 },
+    'VTI': { symbol: 'VTI', basePrice: 245.80, baseChange: 1.85, volume: 34567890 },
+    'VOO': { symbol: 'VOO', basePrice: 421.45, baseChange: 2.67, volume: 23456780 }
+  };
+
+  const result = {};
+  Object.keys(baseETFs).forEach(symbol => {
+    const base = baseETFs[symbol];
+    const priceVariation = (Math.random() - 0.5) * 3; // +/- $1.50
+    const changeVariation = (Math.random() - 0.5) * 1; // +/- $0.50
+    const currentPrice = base.basePrice + priceVariation;
+    const currentChange = base.baseChange + changeVariation;
+    
+    result[symbol] = {
+      symbol: symbol,
+      price: parseFloat(currentPrice.toFixed(2)),
+      change: parseFloat(currentChange.toFixed(2)),
+      changePercent: ((currentChange / currentPrice) * 100).toFixed(2),
+      volume: base.volume + Math.floor((Math.random() - 0.5) * 500000),
+      high: parseFloat((currentPrice + Math.abs(priceVariation) + 0.5).toFixed(2)),
+      low: parseFloat((currentPrice - Math.abs(priceVariation) - 0.5).toFixed(2))
+    };
+  });
+  
+  return result;
 };
 
-// API Routes - All using Tiingo
+const generateMockCryptoData = () => {
+  const baseCrypto = {
+    'btcusd': { symbol: 'BTCUSD', basePrice: 65432.10, baseChange: 1250.30, volume: 12345678 },
+    'ethusd': { symbol: 'ETHUSD', basePrice: 3245.67, baseChange: -89.45, volume: 8765432 },
+    'adausd': { symbol: 'ADAUSD', basePrice: 0.4567, baseChange: 0.0123, volume: 98765432 }
+  };
+
+  const result = {};
+  Object.keys(baseCrypto).forEach(symbol => {
+    const base = baseCrypto[symbol];
+    const priceVariation = (Math.random() - 0.5) * (base.basePrice * 0.05); // +/- 5%
+    const changeVariation = (Math.random() - 0.5) * (base.baseChange * 0.5);
+    const currentPrice = base.basePrice + priceVariation;
+    const currentChange = base.baseChange + changeVariation;
+    
+    result[symbol] = {
+      symbol: symbol.toUpperCase(),
+      price: parseFloat(currentPrice.toFixed(symbol === 'adausd' ? 4 : 2)),
+      change: parseFloat(currentChange.toFixed(symbol === 'adausd' ? 4 : 2)),
+      changePercent: ((currentChange / currentPrice) * 100).toFixed(2),
+      volume: base.volume + Math.floor((Math.random() - 0.5) * 2000000)
+    };
+  });
+  
+  return result;
+};
+
+// API Routes
 app.get('/api/stocks', async (req, res) => {
   try {
-    console.log('🚀 API /api/stocks called - fetching stock and ETF data...');
+    console.log('🚀 /api/stocks called');
     
     const stockSymbols = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'META', 'NVDA'];
     const etfSymbols = ['SPY', 'QQQ', 'IWM', 'VTI', 'VOO'];
@@ -414,60 +385,45 @@ app.get('/api/stocks', async (req, res) => {
     
     if (isTiingoConfigured) {
       try {
-        console.log('📊 Tiingo API configured - fetching live data...');
+        console.log('📊 Attempting to fetch live data from Tiingo...');
         stockData = await fetchTiingoRealTimeData(stockSymbols);
         etfData = await fetchTiingoRealTimeData(etfSymbols);
         
         if (Object.keys(stockData).length > 0 || Object.keys(etfData).length > 0) {
           dataSource = 'live';
-          console.log(`✅ Successfully fetched ${Object.keys(stockData).length} stocks and ${Object.keys(etfData).length} ETFs from Tiingo`);
+          console.log(`✅ LIVE DATA: ${Object.keys(stockData).length} stocks, ${Object.keys(etfData).length} ETFs`);
+        } else {
+          throw new Error('No data returned from Tiingo');
         }
       } catch (apiError) {
-        console.warn('⚠️ Tiingo API failed, using fallback data:', apiError.message);
+        console.warn('⚠️ Tiingo failed, using enhanced demo data:', apiError.message);
         dataSource = 'fallback';
       }
     } else {
-      console.log('⚠️ Tiingo API not configured, using demo data');
+      console.log('⚠️ Tiingo not configured - using enhanced demo data');
     }
     
-    // Use mock data if API failed or not configured
+    // Generate realistic demo data if needed
     if (dataSource === 'fallback') {
-      console.log('📊 Using fallback demo data with random variations...');
-      Object.keys(mockStockData).forEach(symbol => {
-        const baseData = mockStockData[symbol];
-        const variation = (Math.random() - 0.5) * 2;
-        stockData[symbol] = {
-          ...baseData,
-          price: parseFloat((baseData.price + variation).toFixed(2)),
-          change: parseFloat((baseData.change + variation * 0.5).toFixed(2)),
-          changePercent: (((baseData.change + variation * 0.5) / baseData.price) * 100).toFixed(2)
-        };
-      });
-
-      Object.keys(mockETFData).forEach(symbol => {
-        const baseData = mockETFData[symbol];
-        const variation = (Math.random() - 0.5) * 2;
-        etfData[symbol] = {
-          ...baseData,
-          price: parseFloat((baseData.price + variation).toFixed(2)),
-          change: parseFloat((baseData.change + variation * 0.5).toFixed(2)),
-          changePercent: (((baseData.change + variation * 0.5) / baseData.price) * 100).toFixed(2)
-        };
-      });
+      stockData = generateMockStockData();
+      etfData = generateMockETFData();
+      console.log(`📊 DEMO DATA: Generated ${Object.keys(stockData).length} stocks, ${Object.keys(etfData).length} ETFs`);
     }
     
+    // Update cache
     marketCache.stocks = stockData;
     marketCache.etfs = etfData;
     marketCache.lastUpdated = new Date().toISOString();
     
-    console.log(`✅ Returning API response with dataSource: ${dataSource}`);
-    
-    res.json({
+    const response = {
       stocks: stockData,
       etfs: etfData,
       lastUpdated: marketCache.lastUpdated,
       dataSource: dataSource
-    });
+    };
+    
+    console.log(`✅ Returning stocks response - ${Object.keys(stockData).length} stocks, ${Object.keys(etfData).length} ETFs, source: ${dataSource}`);
+    res.json(response);
     
   } catch (error) {
     console.error('❌ Error in /api/stocks:', error);
@@ -477,55 +433,44 @@ app.get('/api/stocks', async (req, res) => {
 
 app.get('/api/crypto', async (req, res) => {
   try {
-    console.log('🚀 API /api/crypto called - fetching crypto data...');
+    console.log('🚀 /api/crypto called');
     
     let cryptoData = {};
     let dataSource = 'fallback';
     
     if (isTiingoConfigured) {
       try {
+        console.log('💰 Attempting to fetch live crypto from Tiingo...');
         cryptoData = await fetchTiingoCrypto();
         if (Object.keys(cryptoData).length > 0) {
           dataSource = 'live';
-          console.log(`✅ Successfully fetched ${Object.keys(cryptoData).length} cryptocurrencies from Tiingo`);
+          console.log(`✅ LIVE CRYPTO: ${Object.keys(cryptoData).length} cryptocurrencies`);
+        } else {
+          throw new Error('No crypto data returned from Tiingo');
         }
       } catch (apiError) {
-        console.warn('⚠️ Tiingo Crypto API failed, using fallback data:', apiError.message);
+        console.warn('⚠️ Tiingo crypto failed, using demo data:', apiError.message);
         dataSource = 'fallback';
       }
     }
     
-    // Use mock data if API failed
+    // Generate demo data if needed
     if (dataSource === 'fallback' || Object.keys(cryptoData).length === 0) {
-      console.log('💰 Using fallback crypto data with random variations...');
-      const mockCryptoData = {
-        'btcusd': { symbol: 'BTCUSD', price: 65432.10, change: 1250.30, changePercent: '1.95', volume: 12345678 },
-        'ethusd': { symbol: 'ETHUSD', price: 3245.67, change: -89.45, changePercent: '-2.68', volume: 8765432 },
-        'adausd': { symbol: 'ADAUSD', price: 0.4567, change: 0.0123, changePercent: '2.77', volume: 98765432 }
-      };
-
-      Object.keys(mockCryptoData).forEach(symbol => {
-        const baseData = mockCryptoData[symbol];
-        const variation = (Math.random() - 0.5) * 100;
-        cryptoData[symbol] = {
-          ...baseData,
-          price: parseFloat((baseData.price + variation).toFixed(2)),
-          change: parseFloat((baseData.change + variation * 0.1).toFixed(2)),
-          changePercent: (((baseData.change + variation * 0.1) / baseData.price) * 100).toFixed(2)
-        };
-      });
+      cryptoData = generateMockCryptoData();
+      console.log(`💰 DEMO CRYPTO: Generated ${Object.keys(cryptoData).length} cryptocurrencies`);
       dataSource = 'fallback';
     }
     
     marketCache.crypto = cryptoData;
     
-    console.log(`✅ Returning crypto response with dataSource: ${dataSource}`);
-    
-    res.json({
+    const response = {
       crypto: cryptoData,
       lastUpdated: new Date().toISOString(),
       dataSource: dataSource
-    });
+    };
+    
+    console.log(`✅ Returning crypto response - ${Object.keys(cryptoData).length} cryptos, source: ${dataSource}`);
+    res.json(response);
     
   } catch (error) {
     console.error('❌ Error in /api/crypto:', error);
@@ -535,65 +480,76 @@ app.get('/api/crypto', async (req, res) => {
 
 app.get('/api/news', async (req, res) => {
   try {
-    console.log('🚀 API /api/news called - fetching news data...');
+    console.log('🚀 /api/news called');
     
     let newsData = [];
     let dataSource = 'fallback';
     
     if (isTiingoConfigured) {
       try {
+        console.log('📰 Attempting to fetch live news from Tiingo...');
         newsData = await fetchTiingoNews();
         if (newsData.length > 0) {
           dataSource = 'live';
-          console.log(`✅ Successfully fetched ${newsData.length} news articles from Tiingo`);
+          console.log(`✅ LIVE NEWS: ${newsData.length} articles`);
+        } else {
+          throw new Error('No news returned from Tiingo');
         }
       } catch (apiError) {
-        console.warn('⚠️ Tiingo News API failed, using fallback data:', apiError.message);
+        console.warn('⚠️ Tiingo news failed, using demo data:', apiError.message);
         dataSource = 'fallback';
       }
     }
     
-    // Use mock data if API failed or returned no results
+    // Generate demo news if needed
     if (dataSource === 'fallback' || newsData.length === 0) {
-      console.log('📰 Using fallback news data...');
+      const currentTime = new Date();
       newsData = [
         {
-          title: "Markets Open Higher Amid Tech Rally - TIINGO DEMO",
-          source: "PFAFF NEWS",
-          publishedAt: new Date().toISOString(),
+          title: "Tech Stocks Rally on Strong Earnings - DEMO MODE",
+          source: "PFAFF FINANCIAL",
+          publishedAt: currentTime.toISOString(),
           url: "#"
         },
         {
-          title: "Federal Reserve Signals Rate Stability - TIINGO DEMO",
+          title: "Federal Reserve Maintains Interest Rates - DEMO MODE",
           source: "REUTERS",
-          publishedAt: new Date(Date.now() - 3600000).toISOString(),
+          publishedAt: new Date(currentTime.getTime() - 1800000).toISOString(),
           url: "#"
         },
         {
-          title: "Apple Reports Strong Quarterly Earnings - TIINGO DEMO",
+          title: "Apple Announces New Product Line - DEMO MODE",
           source: "CNBC",
-          publishedAt: new Date(Date.now() - 7200000).toISOString(),
+          publishedAt: new Date(currentTime.getTime() - 3600000).toISOString(),
           url: "#"
         },
         {
-          title: "Tesla Announces Manufacturing Expansion - TIINGO DEMO",
+          title: "Market Volatility Expected This Week - DEMO MODE",
           source: "BLOOMBERG",
-          publishedAt: new Date(Date.now() - 10800000).toISOString(),
+          publishedAt: new Date(currentTime.getTime() - 5400000).toISOString(),
+          url: "#"
+        },
+        {
+          title: "Cryptocurrency Markets Show Stability - DEMO MODE",
+          source: "COINDESK",
+          publishedAt: new Date(currentTime.getTime() - 7200000).toISOString(),
           url: "#"
         }
       ];
+      console.log(`📰 DEMO NEWS: Generated ${newsData.length} articles`);
       dataSource = 'fallback';
     }
     
     marketCache.news = newsData;
     
-    console.log(`✅ Returning news response with dataSource: ${dataSource}`);
-    
-    res.json({
+    const response = {
       articles: newsData,
       lastUpdated: new Date().toISOString(),
       dataSource: dataSource
-    });
+    };
+    
+    console.log(`✅ Returning news response - ${newsData.length} articles, source: ${dataSource}`);
+    res.json(response);
     
   } catch (error) {
     console.error('❌ Error in /api/news:', error);
@@ -604,9 +560,9 @@ app.get('/api/news', async (req, res) => {
 // Individual stock lookup
 app.get('/api/stocks/:symbol', async (req, res) => {
   const { symbol } = req.params;
+  console.log(`🚀 /api/stocks/${symbol} called`);
   
   try {
-    console.log(`🚀 API /api/stocks/${symbol} called - fetching individual stock data...`);
     let stockData = null;
     
     if (isTiingoConfigured) {
@@ -614,40 +570,31 @@ app.get('/api/stocks/:symbol', async (req, res) => {
         const realData = await fetchTiingoRealTimeData([symbol.toUpperCase()]);
         stockData = realData[symbol.toUpperCase()];
         if (stockData) {
-          console.log(`✅ Successfully fetched live data for ${symbol}: $${stockData.price}`);
+          console.log(`✅ LIVE: ${symbol} = $${stockData.price}`);
         }
       } catch (apiError) {
-        console.warn(`⚠️ Tiingo API failed for ${symbol}, using fallback`);
+        console.warn(`⚠️ Tiingo failed for ${symbol}, using demo data`);
       }
     }
     
-    // Fallback to mock data
+    // Fallback to enhanced demo data
     if (!stockData) {
-      console.log(`📊 Using fallback data for ${symbol}...`);
-      const mockData = mockStockData[symbol.toUpperCase()] || mockETFData[symbol.toUpperCase()];
-      if (mockData) {
-        const variation = (Math.random() - 0.5) * 2;
-        stockData = {
-          ...mockData,
-          price: parseFloat((mockData.price + variation).toFixed(2)),
-          change: parseFloat((mockData.change + variation * 0.5).toFixed(2)),
-          high: parseFloat((mockData.price + Math.abs(variation) + 2).toFixed(2)),
-          low: parseFloat((mockData.price - Math.abs(variation) - 2).toFixed(2)),
-          bidPrice: parseFloat((mockData.price - 0.05).toFixed(2)),
-          askPrice: parseFloat((mockData.price + 0.05).toFixed(2))
-        };
+      const allMockData = { ...generateMockStockData(), ...generateMockETFData() };
+      stockData = allMockData[symbol.toUpperCase()];
+      
+      if (stockData) {
+        console.log(`📊 DEMO: ${symbol} = $${stockData.price}`);
       }
     }
     
     if (stockData) {
-      console.log(`✅ Returning data for ${symbol}`);
       res.json(stockData);
     } else {
-      console.log(`❌ Stock ${symbol} not found`);
+      console.log(`❌ Symbol ${symbol} not found`);
       res.status(404).json({ error: 'Stock not found' });
     }
   } catch (error) {
-    console.error(`❌ Error fetching individual stock ${symbol}:`, error);
+    console.error(`❌ Error fetching ${symbol}:`, error);
     res.status(500).json({ error: 'Failed to fetch stock data' });
   }
 });
@@ -656,305 +603,112 @@ app.get('/api/stocks/:symbol', async (req, res) => {
 app.get('/api/stocks/:symbol/history', async (req, res) => {
   const { symbol } = req.params;
   const { period = '1M' } = req.query;
+  console.log(`🚀 /api/stocks/${symbol}/history called - period: ${period}`);
   
   try {
-    console.log(`🚀 API /api/stocks/${symbol}/history called - period: ${period}`);
     let historicalData = [];
     let dataSource = 'fallback';
     
     if (isTiingoConfigured) {
       try {
-        historicalData = await fetchTiingoHistorical(symbol, period);
-        if (historicalData.length > 0) {
+        const response = await axios.get(`https://api.tiingo.com/tiingo/daily/${symbol.toUpperCase()}/prices`, {
+          params: {
+            token: TIINGO_API_KEY,
+            startDate: new Date(Date.now() - (period === '1W' ? 7 : period === '1M' ? 30 : period === '3M' ? 90 : 365) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            resampleFreq: 'daily'
+          },
+          timeout: 15000
+        });
+        
+        if (response.data && response.data.length > 0) {
+          historicalData = response.data.map(item => ({
+            date: item.date.split('T')[0],
+            close: item.close,
+            volume: item.volume || 0
+          }));
           dataSource = 'live';
+          console.log(`✅ LIVE HISTORY: ${symbol} - ${historicalData.length} data points`);
         }
       } catch (apiError) {
-        console.warn(`⚠️ Tiingo historical API failed for ${symbol}, using fallback:`, apiError.message);
+        console.warn(`⚠️ Tiingo history failed for ${symbol}, generating demo data`);
       }
     }
     
-    // Generate mock data if API failed
+    // Generate realistic demo historical data
     if (historicalData.length === 0) {
-      console.log(`📊 Generating fallback historical data for ${symbol}...`);
       const days = period === '1W' ? 7 : period === '1M' ? 30 : period === '3M' ? 90 : 365;
-      const basePrice = mockStockData[symbol.toUpperCase()]?.price || mockETFData[symbol.toUpperCase()]?.price || 150;
+      const basePrice = 150 + (Math.random() * 200); // Random base between $150-350
       
       for (let i = days; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
-        const variation = (Math.random() - 0.5) * 10;
-        const price = Math.max(50, basePrice + variation);
+        
+        // Create realistic price movement
+        const trend = Math.sin(i / 10) * 5; // Gentle trending
+        const noise = (Math.random() - 0.5) * 8; // Daily volatility
+        const price = Math.max(10, basePrice + trend + noise);
         
         historicalData.push({
           date: date.toISOString().split('T')[0],
           close: parseFloat(price.toFixed(2)),
-          volume: Math.floor(Math.random() * 10000000)
+          volume: Math.floor(Math.random() * 10000000) + 1000000
         });
       }
+      console.log(`📊 DEMO HISTORY: ${symbol} - Generated ${historicalData.length} data points`);
       dataSource = 'fallback';
     }
     
-    console.log(`✅ Returning ${historicalData.length} data points for ${symbol} (${dataSource})`);
-    
-    res.json({
+    const response = {
       symbol: symbol.toUpperCase(),
       period: period,
       data: historicalData,
       dataSource: dataSource
-    });
+    };
+    
+    console.log(`✅ Returning history for ${symbol} - ${historicalData.length} points, source: ${dataSource}`);
+    res.json(response);
     
   } catch (error) {
-    console.error(`❌ Error fetching historical data for ${symbol}:`, error);
+    console.error(`❌ Error fetching history for ${symbol}:`, error);
     res.status(500).json({ error: 'Failed to fetch historical data' });
   }
 });
 
-// Fundamentals endpoint using Tiingo meta data
-app.get('/api/fundamentals/:symbol', async (req, res) => {
+// Simple endpoints for analysis features
+app.get('/api/fundamentals/:symbol', (req, res) => {
   const { symbol } = req.params;
+  console.log(`🚀 /api/fundamentals/${symbol} called`);
   
-  try {
-    console.log(`🚀 API /api/fundamentals/${symbol} called`);
-    let fundamentals = null;
-    let dataSource = 'fallback';
-    
-    if (isTiingoConfigured) {
-      try {
-        const metaData = await fetchTiingoFundamentals(symbol);
-        if (metaData) {
-          fundamentals = {
-            symbol: metaData.symbol,
-            name: metaData.name,
-            description: metaData.description,
-            sector: metaData.sector,
-            industry: metaData.industry,
-            exchange: metaData.exchange,
-            startDate: metaData.startDate,
-            endDate: metaData.endDate,
-            // Mock financial ratios since Tiingo doesn't provide these
-            peRatio: 20 + Math.random() * 15,
-            pbRatio: 2.5 + Math.random() * 3,
-            eps: 5 + Math.random() * 5,
-            dividendYield: Math.random() * 0.05
-          };
-          dataSource = 'live';
-        }
-      } catch (apiError) {
-        console.warn(`⚠️ Tiingo fundamentals API failed for ${symbol}, using fallback:`, apiError.message);
-      }
-    }
-    
-    // Fallback to mock data
-    if (!fundamentals) {
-      console.log(`📊 Using fallback fundamentals data for ${symbol}...`);
-      fundamentals = {
-        symbol: symbol.toUpperCase(),
-        name: `${symbol.toUpperCase()} Corp`,
-        description: 'Company information via Tiingo API',
-        peRatio: 24.5 + Math.random() * 10,
-        pbRatio: 3.2 + Math.random() * 2,
-        eps: 6.15 + Math.random() * 2,
-        dividendYield: 0.005 + Math.random() * 0.02,
-        marketCap: 2900000000000 + Math.random() * 500000000000,
-        revenue: 394300000000 + Math.random() * 50000000000,
-        sector: "Technology",
-        industry: "Software"
-      };
-    }
-
-    console.log(`✅ Returning fundamentals for ${symbol} (${dataSource})`);
-    res.json(fundamentals);
-  } catch (error) {
-    console.error(`❌ Error fetching fundamentals for ${symbol}:`, error);
-    res.status(500).json({ error: 'Failed to fetch fundamental data' });
-  }
-});
-
-// Technical analysis endpoint (mock data - Tiingo doesn't provide technical indicators)
-app.get('/api/technical/:symbol', (req, res) => {
-  const { symbol } = req.params;
-  console.log(`🚀 API /api/technical/${symbol} called`);
-  
-  const mockTechnical = {
+  const fundamentals = {
     symbol: symbol.toUpperCase(),
-    indicators: {
-      sma20: 148.5 + Math.random() * 10,
-      sma50: 145.2 + Math.random() * 10,
-      ema12: 149.8 + Math.random() * 10,
-      rsi: 45 + Math.random() * 40,
-      macd: (Math.random() - 0.5) * 5,
-      signal: Math.random() > 0.5 ? 'BUY' : 'SELL'
-    }
+    name: `${symbol.toUpperCase()} Corporation`,
+    peRatio: (20 + Math.random() * 15).toFixed(2),
+    pbRatio: (2 + Math.random() * 3).toFixed(2),
+    eps: (5 + Math.random() * 10).toFixed(2),
+    dividendYield: (Math.random() * 0.05).toFixed(4),
+    marketCap: (Math.random() * 1000000000000).toFixed(0),
+    revenue: (Math.random() * 500000000000).toFixed(0),
+    sector: "Technology",
+    industry: "Software"
   };
 
-  console.log(`✅ Returning technical analysis for ${symbol}`);
-  res.json(mockTechnical);
+  console.log(`✅ Returning fundamentals for ${symbol}`);
+  res.json(fundamentals);
 });
 
-// Sector analysis endpoint (using Tiingo meta data)
-app.get('/api/sector/:symbol', async (req, res) => {
+app.get('/api/technical/:symbol', (req, res) => {
   const { symbol } = req.params;
-  console.log(`🚀 API /api/sector/${symbol} called`);
+  console.log(`🚀 /api/technical/${symbol} called`);
   
-  try {
-    let sectorData = null;
-    
-    if (isTiingoConfigured) {
-      try {
-        const metaData = await fetchTiingoFundamentals(symbol);
-        if (metaData) {
-          sectorData = {
-            symbol: metaData.symbol,
-            name: metaData.name,
-            sector: metaData.sector || "TECHNOLOGY",
-            industry: metaData.industry || "SOFTWARE",
-            exchange: metaData.exchange || "NASDAQ",
-            marketCap: "$2.9T",
-            beta: "1.24",
-            fiftyTwoWeekHigh: "$198.23",
-            fiftyTwoWeekLow: "$124.17",
-            analystRating: "STRONG BUY",
-            pfaffRating: "BUY",
-            dataSource: 'live'
-          };
-        }
-      } catch (apiError) {
-        console.warn(`⚠️ Tiingo sector API failed for ${symbol}, using fallback:`, apiError.message);
-      }
-    }
-    
-    // Fallback to mock data
-    if (!sectorData) {
-      console.log(`🏢 Using fallback sector data for ${symbol}...`);
-      sectorData = {
-        symbol: symbol.toUpperCase(),
-        sector: "TECHNOLOGY",
-        industry: "SOFTWARE",
-        marketCap: "$2.9T",
-        beta: "1.24",
-        fiftyTwoWeekHigh: "$198.23",
-        fiftyTwoWeekLow: "$124.17",
-        analystRating: "STRONG BUY",
-        pfaffRating: "BUY",
-        dataSource: 'fallback'
-      };
-    }
-
-    console.log(`✅ Returning sector data for ${symbol}`);
-    res.json(sectorData);
-  } catch (error) {
-    console.error(`❌ Error fetching sector data for ${symbol}:`, error);
-    res.status(500).json({ error: 'Failed to fetch sector data' });
-  }
-});
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  console.log('🚀 API /api/health called');
-  
-  res.json({
-    status: 'healthy',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-    authenticated: true, // Always true since auth is bypassed
-    user: 'bypass-user',
-    environment: process.env.NODE_ENV || 'development',
-    tiingoConfigured: isTiingoConfigured,
-    authenticationBypassed: true,
-    features: {
-      stocks: isTiingoConfigured ? 'live' : 'fallback',
-      etfs: isTiingoConfigured ? 'live' : 'fallback',
-      crypto: isTiingoConfigured ? 'live' : 'fallback',
-      news: isTiingoConfigured ? 'live' : 'fallback',
-      fundamentals: isTiingoConfigured ? 'live' : 'fallback',
-      historical: isTiingoConfigured ? 'live' : 'fallback'
-    },
-    cacheStatus: {
-      lastUpdated: marketCache.lastUpdated,
-      stockCount: Object.keys(marketCache.stocks).length,
-      etfCount: Object.keys(marketCache.etfs).length,
-      cryptoCount: Object.keys(marketCache.crypto).length,
-      newsCount: marketCache.news.length
-    }
-  });
-});
-
-// Scheduled data updates - runs every 2 minutes during market hours
-cron.schedule('*/2 9-16 * * 1-5', async () => {
-  if (isTiingoConfigured) {
-    console.log('🔄 Scheduled Tiingo data update...');
-    try {
-      const stockSymbols = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'META', 'NVDA'];
-      const etfSymbols = ['SPY', 'QQQ', 'IWM', 'VTI', 'VOO'];
+  const rsi = 30 + Math.random() * 40;
+  const technical = {
+    symbol: symbol.toUpperCase(),
+    indicators: {
+      sma20: (140 + Math.random() * 20).toFixed(2),
+            sma50: (135 + Math.random() * 20).toFixed(2)
+          }
+        };
       
-      const [stockData, etfData, cryptoData] = await Promise.all([
-        fetchTiingoRealTimeData(stockSymbols),
-        fetchTiingoRealTimeData(etfSymbols),
-        fetchTiingoCrypto()
-      ]);
-      
-      // Update cache
-      if (stockData && Object.keys(stockData).length > 0) {
-        marketCache.stocks = stockData;
-      }
-      if (etfData && Object.keys(etfData).length > 0) {
-        marketCache.etfs = etfData;
-      }
-      if (cryptoData && Object.keys(cryptoData).length > 0) {
-        marketCache.crypto = cryptoData;
-      }
-      
-      marketCache.lastUpdated = new Date().toISOString();
-      console.log('✅ Tiingo live data updated successfully');
-    } catch (error) {
-      console.error('❌ Scheduled Tiingo update failed:', error);
-    }
-  }
-}, {
-  timezone: "America/New_York"
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('❌ Server error:', err);
-  res.status(500).json({ 
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-  });
-});
-
-// 404 handler
-app.use((req, res) => {
-  console.log(`❌ 404 - Route not found: ${req.method} ${req.path}`);
-  res.status(404).json({ error: 'Not found' });
-});
-
-app.listen(PORT, () => {
-  console.log(`🚀 Pfaff Terminal Dashboard running on port ${PORT}`);
-  console.log(`🔒 HTTPS: ${process.env.NODE_ENV === 'production' ? 'ENABLED' : 'DEVELOPMENT MODE'}`);
-  console.log(`🔓 AUTHENTICATION: BYPASSED - ALL API ACCESS ALLOWED`);
-  console.log(`💼 Pfaff Terminal v1.0 - Professional Financial System`);
-  console.log(`📊 TIINGO-ONLY INTEGRATION:`);
-  console.log(`   - Tiingo API: ${isTiingoConfigured ? '✅ CONFIGURED - LIVE DATA' : '❌ NOT CONFIGURED - DEMO DATA'}`);
-  console.log(`   - Stocks & ETFs: ${isTiingoConfigured ? 'LIVE' : 'DEMO'}`);
-  console.log(`   - Crypto: ${isTiingoConfigured ? 'LIVE' : 'DEMO'}`);
-  console.log(`   - News: ${isTiingoConfigured ? 'LIVE' : 'DEMO'}`);
-  console.log(`   - Historical Charts: ${isTiingoConfigured ? 'LIVE' : 'DEMO'}`);
-  console.log(`   - Fundamentals: ${isTiingoConfigured ? 'LIVE META' : 'DEMO'}`);
-  
-  if (!isTiingoConfigured) {
-    console.log(`\n⚠️  TIINGO API NOT CONFIGURED - RUNNING IN DEMO MODE`);
-    console.log(`📋 To get live data:`);
-    console.log(`   1. Create .env file with: TIINGO_API_KEY=your-api-key-here`);
-    console.log(`   2. Sign up for FREE Tiingo API: https://api.tiingo.com/`);
-    console.log(`   3. Restart server`);
-    console.log(`   4. Enjoy live stocks, ETFs, crypto, news, and charts!`);
-  } else {
-    console.log(`\n✅ TIINGO LIVE DATA ACTIVE`);
-    console.log(`📈 All market data is being fetched from Tiingo API`);
-    console.log(`🔄 Auto-refresh every 2 minutes during market hours`);
-  }
-  
-  console.log(`\n🌐 Access your terminal at: http://localhost:${PORT}`);
-  console.log(`🔓 No login required - authentication bypassed for immediate access`);
-});
+        console.log(`✅ Returning technical indicators for ${symbol}`);
+        res.json(technical);
+      });

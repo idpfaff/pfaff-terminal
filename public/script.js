@@ -810,15 +810,16 @@ class FinancialDashboard {
 
     showDataSourceIndicator(type, source) {
         console.log(`📊 Data source indicator: ${type} = ${source}`);
-        
+
+        const live = source && source !== 'demo';
         const indicator = document.createElement('div');
-        indicator.className = `data-source-indicator ${source}`;
-        indicator.textContent = source === 'live' ? 'LIVE' : 'DEMO';
+        indicator.className = `data-source-indicator ${live ? 'live' : 'demo'}`;
+        indicator.textContent = live ? 'LIVE' : 'DEMO';
         indicator.style.cssText = `
             position: fixed;
             top: 80px;
             right: 10px;
-            background: ${source === 'live' ? '#00ff41' : '#ffb700'};
+            background: ${live ? '#00ff41' : '#ffb700'};
             color: #000;
             padding: 2px 6px;
             font-size: 0.7rem;
@@ -826,9 +827,9 @@ class FinancialDashboard {
             z-index: 1000;
             border-radius: 2px;
         `;
-        
+
         document.body.appendChild(indicator);
-        
+
         setTimeout(() => {
             if (indicator.parentNode) {
                 indicator.parentNode.removeChild(indicator);
@@ -926,6 +927,15 @@ class FinancialDashboard {
             const tokenRes = await fetch('/api/tiingo/token');
             const { token } = await tokenRes.json();
             const tickers = Object.keys(this.watchlistData || {}).join(',');
+
+            if (!token || !tickers) {
+                console.warn('⚠️ WebSocket disabled - missing token or tickers');
+                if (wsStatus) wsStatus.textContent = 'OFFLINE';
+                const statusDot = document.querySelector('.status-dot');
+                if (statusDot) statusDot.className = 'status-dot status-disconnected';
+                return;
+            }
+
             const url = `wss://api.tiingo.com/iex?tickers=${tickers}&token=${token}&thresholdLevel=5`;
             const ws = new WebSocket(url);
             this.webSocket = ws;
@@ -966,6 +976,9 @@ class FinancialDashboard {
             };
         } catch (error) {
             console.error('❌ WebSocket initialization failed:', error);
+            if (wsStatus) wsStatus.textContent = 'OFFLINE';
+            const statusDot = document.querySelector('.status-dot');
+            if (statusDot) statusDot.className = 'status-dot status-disconnected';
         }
     }
 

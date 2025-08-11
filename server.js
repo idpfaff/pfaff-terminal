@@ -107,19 +107,30 @@ app.get('/auth/login', (req, res) => {
 app.post('/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body || {};
-    if (!ADMIN_PASSWORD_HASH) return res.status(500).send('Server not configured (ADMIN_PASSWORD_HASH missing).');
+    if (!ADMIN_PASSWORD_HASH) {
+      return res.status(500).json({ success: false, error: 'Server not configured (ADMIN_PASSWORD_HASH missing).' });
+    }
 
-    if (clean(username) !== ADMIN_USERNAME) return res.status(401).send('Invalid credentials.');
+    if (clean(username) !== ADMIN_USERNAME) {
+      return res.status(401).json({ success: false, error: 'Invalid credentials.' });
+    }
     const ok = await bcrypt.compare(password || '', ADMIN_PASSWORD_HASH);
-    if (!ok) return res.status(401).send('Invalid credentials.');
+    if (!ok) {
+      return res.status(401).json({ success: false, error: 'Invalid credentials.' });
+    }
 
     req.session.authenticated = true;
     req.session.user = { username: ADMIN_USERNAME };
-    res.redirect('/');
+    return res.json({ success: true });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).send('Login failed.');
+    res.status(500).json({ success: false, error: 'Login failed.' });
   }
+});
+
+app.get('/auth/status', (req, res) => {
+  const authenticated = !!(req.session && req.session.authenticated);
+  res.json({ authenticated });
 });
 
 app.post('/auth/logout', (req, res) => {

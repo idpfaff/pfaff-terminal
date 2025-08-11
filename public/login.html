@@ -208,7 +208,7 @@
                                 if (data.success) {
                                     message.innerHTML = '<div class="success-message">ACCESS GRANTED - LOADING PFAFF TERMINAL...</div>';
                                     setTimeout(function() {
-                                        window.location.href = '/dashboard';
+                                        window.location.href = '/dashboard.html';
                                     }, 1500);
                                 } else {
                                     message.innerHTML = '<div class="error-message">' + (data.error || 'ACCESS DENIED') + '</div>';
@@ -282,7 +282,7 @@
                         try {
                             var data = JSON.parse(authCheck.responseText);
                             if (data.authenticated) {
-                                window.location.href = '/dashboard';
+                                window.location.href = '/dashboard.html';
                             }
                         } catch (e) {
                             // Ignore auth check errors

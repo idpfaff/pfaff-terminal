@@ -208,6 +208,7 @@
                                 if (data.success) {
                                     message.innerHTML = '<div class="success-message">ACCESS GRANTED - LOADING PFAFF TERMINAL...</div>';
                                     setTimeout(function() {
+                                        // Redirect directly to the dashboard after successful auth
                                         window.location.href = '/';
                                     }, 1500);
                                 } else {

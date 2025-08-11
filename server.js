@@ -283,7 +283,7 @@ app.get('/api/tiingo/crypto/prices', async (req, res) => {
 });
 
 // Fundamental definitions
-app.get('/api/tiingo/fundamentals/definitions', async (_req, res) => {
+app.get('/api/fundamentals/definitions', async (_req, res) => {
   try {
     const r = await tiingo.get('/tiingo/fundamentals/definitions');
     res.json(r.data);

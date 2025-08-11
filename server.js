@@ -215,6 +215,144 @@ app.get('/api/tiingo/news', async (req, res) => {
 });
 
 /* ---------------------------
+   Frontend helper APIs
+--------------------------- */
+
+// Basic health check used by the dashboard
+app.get('/api/health', (_req, res) => {
+  res.json({
+    ok: true,
+    tiingoConfigured: !!TIINGO_API_KEY,
+    features: {
+      stocks: true,
+      crypto: true,
+      news: true,
+    },
+  });
+});
+
+// Helper to normalize Tiingo IEX quotes into the shape expected by the UI
+function normalizeQuote(q) {
+  if (!q) return null;
+  const change = (q.last ?? 0) - (q.prevClose ?? 0);
+  return {
+    symbol: q.ticker,
+    price: q.last,
+    change,
+    changePercent: q.prevClose ? (change / q.prevClose * 100) : 0,
+    volume: q.volume,
+    high: q.high,
+    low: q.low,
+    open: q.open,
+    close: q.prevClose,
+    bidPrice: q.bidPrice,
+    askPrice: q.askPrice,
+  };
+}
+
+// Watchlist data (stocks + ETFs)
+app.get('/api/stocks', async (_req, res) => {
+  try {
+    const tickers = 'AAPL,MSFT,GOOGL,AMZN,SPY,QQQ';
+    const r = await tiingo.get('/iex', { params: { tickers } });
+    const stocks = {};
+    const etfs = {};
+    (r.data || []).forEach((q) => {
+      const item = normalizeQuote(q);
+      if (!item) return;
+      if (['SPY', 'QQQ'].includes(item.symbol)) etfs[item.symbol] = item;
+      else stocks[item.symbol] = item;
+    });
+    res.json({ dataSource: 'tiingo', stocks, etfs });
+  } catch (err) {
+    const status = err?.response?.status;
+    console.error('Stocks API error:', status, err?.message);
+    res.status(status || 500).json({ error: err?.message });
+  }
+});
+
+// Detailed quote for a single symbol
+app.get('/api/stocks/:symbol', async (req, res) => {
+  const { symbol } = req.params;
+  try {
+    const r = await tiingo.get('/iex', { params: { tickers: symbol } });
+    const quote = normalizeQuote(r.data && r.data[0]);
+    if (!quote) return res.status(404).json({ error: 'Symbol not found' });
+    res.json(quote);
+  } catch (err) {
+    const status = err?.response?.status;
+    console.error('Stock detail error:', status, err?.message);
+    res.status(status || 500).json({ error: err?.message });
+  }
+});
+
+// Historical data for charting
+app.get('/api/stocks/:symbol/history', async (req, res) => {
+  const { symbol } = req.params;
+  const { period = '1M' } = req.query;
+  try {
+    const end = new Date();
+    const start = new Date(end);
+    switch (period) {
+      case '1D': start.setDate(end.getDate() - 1); break;
+      case '1W': start.setDate(end.getDate() - 7); break;
+      case '6M': start.setMonth(end.getMonth() - 6); break;
+      case '1Y': start.setFullYear(end.getFullYear() - 1); break;
+      default:   start.setMonth(end.getMonth() - 1); break; // 1M
+    }
+    const r = await tiingo.get(`/tiingo/daily/${encodeURIComponent(symbol)}/prices`, {
+      params: {
+        startDate: start.toISOString().slice(0, 10),
+        endDate: end.toISOString().slice(0, 10),
+        resampleFreq: 'daily',
+      },
+    });
+    res.json({ dataSource: 'tiingo', data: r.data });
+  } catch (err) {
+    const status = err?.response?.status;
+    console.error('Stock history error:', status, err?.message);
+    res.status(status || 500).json({ error: err?.message });
+  }
+});
+
+// Basic crypto prices
+app.get('/api/crypto', async (_req, res) => {
+  try {
+    const r = await tiingo.get('/tiingo/crypto/prices', {
+      params: { tickers: 'btcusd,ethusd', resampleFreq: '1day' },
+    });
+    const crypto = {};
+    (r.data || []).forEach((q) => {
+      const base = (q.ticker || '').toUpperCase().replace('USD', '');
+      crypto[base] = {
+        symbol: base,
+        price: q.close,
+        change: q.close - q.open,
+        changePercent: q.open ? ((q.close - q.open) / q.open * 100) : 0,
+        volume: q.volume,
+      };
+    });
+    res.json({ dataSource: 'tiingo', crypto });
+  } catch (err) {
+    const status = err?.response?.status;
+    console.error('Crypto API error:', status, err?.message);
+    res.status(status || 500).json({ error: err?.message });
+  }
+});
+
+// News articles
+app.get('/api/news', async (_req, res) => {
+  try {
+    const r = await tiingo.get('/tiingo/news', { params: { limit: 20 } });
+    res.json({ dataSource: 'tiingo', news: r.data });
+  } catch (err) {
+    const status = err?.response?.status;
+    console.error('News API error:', status, err?.message);
+    res.status(status || 500).json({ error: err?.message });
+  }
+});
+
+/* ---------------------------
    404 + error handlers
 --------------------------- */
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));

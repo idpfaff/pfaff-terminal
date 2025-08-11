@@ -22,6 +22,7 @@ const ADMIN_PASSWORD_HASH= clean(process.env.ADMIN_PASSWORD_HASH);
 
 const TIINGO_API_KEY     = clean(process.env.TIINGO_API_KEY);
 const TIINGO_BASE_URL    = clean(process.env.TIINGO_BASE_URL) || 'https://api.tiingo.com';
+const SESSION_COOKIE_SECURE = clean(process.env.SESSION_COOKIE_SECURE) === 'true';
 
 // Helpful startup warnings
 if (!TIINGO_API_KEY)     console.warn('⚠️  TIINGO_API_KEY is not set. Tiingo calls will fail.');
@@ -34,6 +35,11 @@ if (!SESSION_SECRET)     console.warn('⚠️  SESSION_SECRET is not set. Using 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Support deployments behind proxies when secure cookies are enabled
+if (SESSION_COOKIE_SECURE) {
+  app.set('trust proxy', 1);
+}
+
 app.use(session({
   secret: SESSION_SECRET,
   resave: false,
@@ -41,7 +47,10 @@ app.use(session({
   cookie: {
     httpOnly: true,
     sameSite: 'lax',
-    secure: NODE_ENV === 'production',
+    // Always send the session cookie over HTTP. This avoids login loops
+    // when running behind proxies or using plain HTTP in production.
+    // Enable HTTPS-only cookies by setting SESSION_COOKIE_SECURE=true.
+    secure: SESSION_COOKIE_SECURE,
   },
 }));
 
@@ -274,14 +283,17 @@ app.get('/api/tiingo/crypto/prices', async (req, res) => {
 });
 
 // Fundamental definitions
-app.get('/api/tiingo/fundamentals/definitions', async (_req, res) => {
+app.get(['/api/tiingo/fundamentals/definitions', '/api/fundamentals/definitions'], async (_req, res) => {
+  if (!TIINGO_API_KEY) {
+    return res.json(DEMO_FUNDAMENTALS);
+  }
   try {
     const r = await tiingo.get('/tiingo/fundamentals/definitions');
     res.json(r.data);
   } catch (err) {
     const status = err?.response?.status;
     console.error('Tiingo fundamentals error:', status, err?.message);
-    res.status(status || 500).json(err?.response?.data || { error: err?.message });
+    res.json(DEMO_FUNDAMENTALS);
   }
 });
 
@@ -323,8 +335,38 @@ function normalizeQuote(q) {
   };
 }
 
+// Fallback demo data used when Tiingo is unavailable
+const DEMO_STOCKS = {
+  AAPL: { symbol: 'AAPL', price: 150, change: 1.2, changePercent: 0.8, volume: 5000000, high: 151, low: 149, open: 149.5, close: 148.8, bidPrice: 149.9, askPrice: 150.1 },
+  MSFT: { symbol: 'MSFT', price: 320, change: -2.1, changePercent: -0.65, volume: 3000000, high: 323, low: 319, open: 322, close: 322.1, bidPrice: 319.5, askPrice: 320.2 },
+  GOOGL: { symbol: 'GOOGL', price: 135, change: 0.5, changePercent: 0.37, volume: 2000000, high: 136, low: 134, open: 134.5, close: 134.5, bidPrice: 134.8, askPrice: 135.2 },
+  AMZN: { symbol: 'AMZN', price: 140, change: -0.8, changePercent: -0.57, volume: 2500000, high: 141, low: 139, open: 140.2, close: 140.8, bidPrice: 139.9, askPrice: 140.1 },
+};
+const DEMO_ETFS = {
+  SPY: { symbol: 'SPY', price: 440, change: -1, changePercent: -0.23, volume: 1000000, high: 441, low: 438, open: 439, close: 441, bidPrice: 439.5, askPrice: 439.8 },
+  QQQ: { symbol: 'QQQ', price: 370, change: 2.5, changePercent: 0.68, volume: 800000, high: 371, low: 368, open: 369, close: 367.5, bidPrice: 369.2, askPrice: 370.1 },
+};
+const DEMO_CRYPTO = {
+  BTC: { symbol: 'BTC', price: 30000, change: 300, changePercent: 1.0, volume: 1200 },
+  ETH: { symbol: 'ETH', price: 2000, change: -10, changePercent: -0.5, volume: 5000 },
+};
+const DEMO_FX = {
+  EURUSD: { symbol: 'EURUSD', price: 1.08, bid: 1.079, ask: 1.081 },
+  GBPUSD: { symbol: 'GBPUSD', price: 1.25, bid: 1.249, ask: 1.251 },
+  USDJPY: { symbol: 'USDJPY', price: 140, bid: 139.9, ask: 140.1 },
+};
+const DEMO_NEWS = [
+  { title: 'Demo data loaded – configure TIINGO_API_KEY for live markets', source: 'PFAFF', url: '#', publishedAt: new Date().toISOString() },
+];
+const DEMO_FUNDAMENTALS = [
+  { statementType: 'DEMO', field: 'DemoField', description: 'Demo fundamentals – configure TIINGO_API_KEY for live data' },
+];
+
 // Watchlist data (stocks + ETFs)
 app.get('/api/stocks', async (_req, res) => {
+  if (!TIINGO_API_KEY) {
+    return res.json({ dataSource: 'demo', stocks: DEMO_STOCKS, etfs: DEMO_ETFS });
+  }
   try {
     const tickers = 'AAPL,MSFT,GOOGL,AMZN,SPY,QQQ';
     const r = await tiingo.get('/iex', { params: { tickers } });
@@ -340,21 +382,32 @@ app.get('/api/stocks', async (_req, res) => {
   } catch (err) {
     const status = err?.response?.status;
     console.error('Stocks API error:', status, err?.message);
-    res.status(status || 500).json({ error: err?.message });
+    res.json({ dataSource: 'demo', stocks: DEMO_STOCKS, etfs: DEMO_ETFS });
   }
 });
 
 // Detailed quote for a single symbol
 app.get('/api/stocks/:symbol', async (req, res) => {
   const { symbol } = req.params;
+  const sym = (symbol || '').toUpperCase();
+
+  // Demo fallback when Tiingo is unavailable
+  if (!TIINGO_API_KEY) {
+    const demo = DEMO_STOCKS[sym] || DEMO_ETFS[sym];
+    if (demo) return res.json(demo);
+    return res.status(404).json({ error: 'Symbol not found' });
+  }
+
   try {
-    const r = await tiingo.get('/iex', { params: { tickers: symbol } });
+    const r = await tiingo.get('/iex', { params: { tickers: sym } });
     const quote = normalizeQuote(r.data && r.data[0]);
     if (!quote) return res.status(404).json({ error: 'Symbol not found' });
     res.json(quote);
   } catch (err) {
     const status = err?.response?.status;
     console.error('Stock detail error:', status, err?.message);
+    const demo = DEMO_STOCKS[sym] || DEMO_ETFS[sym];
+    if (demo) return res.json(demo);
     res.status(status || 500).json({ error: err?.message });
   }
 });
@@ -390,6 +443,9 @@ app.get('/api/stocks/:symbol/history', async (req, res) => {
 
 // Basic crypto prices
 app.get('/api/crypto', async (_req, res) => {
+  if (!TIINGO_API_KEY) {
+    return res.json({ dataSource: 'demo', crypto: DEMO_CRYPTO });
+  }
   try {
     const r = await tiingo.get('/tiingo/crypto/prices', {
       params: { tickers: 'btcusd,ethusd', resampleFreq: '1day' },
@@ -409,12 +465,15 @@ app.get('/api/crypto', async (_req, res) => {
   } catch (err) {
     const status = err?.response?.status;
     console.error('Crypto API error:', status, err?.message);
-    res.status(status || 500).json({ error: err?.message });
+    res.json({ dataSource: 'demo', crypto: DEMO_CRYPTO });
   }
 });
 
 // Basic forex prices
 app.get('/api/fx', async (_req, res) => {
+  if (!TIINGO_API_KEY) {
+    return res.json({ dataSource: 'demo', fx: DEMO_FX });
+  }
   try {
     const tickers = 'eurusd,gbpusd,usdjpy';
     const r = await tiingo.get('/tiingo/fx/top', { params: { tickers } });
@@ -432,20 +491,29 @@ app.get('/api/fx', async (_req, res) => {
   } catch (err) {
     const status = err?.response?.status;
     console.error('Forex API error:', status, err?.message);
-    res.status(status || 500).json({ error: err?.message });
+    res.json({ dataSource: 'demo', fx: DEMO_FX });
   }
 });
 
 // News articles
 app.get('/api/news', async (req, res) => {
+  if (!TIINGO_API_KEY) {
+    return res.json({ dataSource: 'demo', articles: DEMO_NEWS });
+  }
   try {
     const params = { limit: 20, ...req.query };
     const r = await tiingo.get('/tiingo/news', { params });
-    res.json({ dataSource: 'tiingo', news: r.data });
+    const articles = (r.data || []).map((n) => ({
+      title: n.title,
+      source: n.source,
+      url: n.url,
+      publishedAt: n.publishedDate,
+    }));
+    res.json({ dataSource: 'tiingo', articles });
   } catch (err) {
     const status = err?.response?.status;
     console.error('News API error:', status, err?.message);
-    res.status(status || 500).json({ error: err?.message });
+    res.json({ dataSource: 'demo', articles: DEMO_NEWS });
   }
 });
 

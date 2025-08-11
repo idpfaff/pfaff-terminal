@@ -22,6 +22,7 @@ const ADMIN_PASSWORD_HASH= clean(process.env.ADMIN_PASSWORD_HASH);
 
 const TIINGO_API_KEY     = clean(process.env.TIINGO_API_KEY);
 const TIINGO_BASE_URL    = clean(process.env.TIINGO_BASE_URL) || 'https://api.tiingo.com';
+const SESSION_COOKIE_SECURE = clean(process.env.SESSION_COOKIE_SECURE) === 'true';
 
 // Helpful startup warnings
 if (!TIINGO_API_KEY)     console.warn('⚠️  TIINGO_API_KEY is not set. Tiingo calls will fail.');
@@ -34,6 +35,11 @@ if (!SESSION_SECRET)     console.warn('⚠️  SESSION_SECRET is not set. Using 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Support deployments behind proxies when secure cookies are enabled
+if (SESSION_COOKIE_SECURE) {
+  app.set('trust proxy', 1);
+}
+
 app.use(session({
   secret: SESSION_SECRET,
   resave: false,
@@ -41,7 +47,10 @@ app.use(session({
   cookie: {
     httpOnly: true,
     sameSite: 'lax',
-    secure: NODE_ENV === 'production',
+    // Always send the session cookie over HTTP. This avoids login loops
+    // when running behind proxies or using plain HTTP in production.
+    // Enable HTTPS-only cookies by setting SESSION_COOKIE_SECURE=true.
+    secure: SESSION_COOKIE_SECURE,
   },
 }));
 

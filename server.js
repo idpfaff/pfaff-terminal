@@ -45,7 +45,10 @@ app.use(session({
   },
 }));
 
-// Static assets (expects public/index.html and public/login.html)
+// Protect dashboard page but allow login assets
+app.use('/dashboard.html', requireAuth);
+
+// Static assets (expects public/dashboard.html and public/login.html)
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ---------------------------
@@ -141,8 +144,8 @@ app.post('/auth/logout', (req, res) => {
    App shell
 --------------------------- */
 app.get('/', requireAuth, (req, res) => {
-  const indexPath = path.join(__dirname, 'public', 'index.html');
-  res.sendFile(indexPath, (err) => {
+  const dashPath = path.join(__dirname, 'public', 'dashboard.html');
+  res.sendFile(dashPath, (err) => {
     if (err) res.status(200).send('<h1>PFAFF Terminal</h1><p>Logged in.</p>');
   });
 });

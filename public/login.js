@@ -54,7 +54,7 @@ async function checkAuthStatus() {
             const data = await response.json();
             if (data.authenticated) {
                 console.log('Already authenticated, redirecting...');
-                window.location.href = '/dashboard.html';
+                window.location.href = '/';
                 return;
             }
         }
@@ -112,7 +112,7 @@ async function handleLogin() {
             // Redirect after brief delay
             setTimeout(() => {
                 console.log('Redirecting to dashboard...');
-                window.location.href = '/dashboard.html';
+                window.location.href = '/';
             }, 1500);
         } else {
             console.log('Login failed:', data.error);

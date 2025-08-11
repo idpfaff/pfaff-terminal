@@ -102,7 +102,9 @@ class FinancialDashboard {
         
         try {
             console.log('🌐 Making request to /api/stocks...');
-            const response = await fetch('/api/stocks');
+            const response = await fetch('/api/stocks', {
+                credentials: 'same-origin'
+            });
             
             console.log('📊 Response status:', response.status);
             console.log('📊 Response ok:', response.ok);
@@ -147,7 +149,9 @@ class FinancialDashboard {
         
         try {
             console.log('🌐 Making request to /api/crypto...');
-            const response = await fetch('/api/crypto');
+            const response = await fetch('/api/crypto', {
+                credentials: 'same-origin'
+            });
             
             console.log('💰 Response status:', response.status);
             console.log('💰 Response ok:', response.ok);
@@ -187,7 +191,9 @@ class FinancialDashboard {
 
         try {
             console.log('🌐 Making request to /api/fx...');
-            const response = await fetch('/api/fx');
+            const response = await fetch('/api/fx', {
+                credentials: 'same-origin'
+            });
 
             console.log('💱 Response status:', response.status);
             console.log('💱 Response ok:', response.ok);
@@ -219,7 +225,9 @@ class FinancialDashboard {
         
         try {
             console.log('🌐 Making request to /api/news...');
-            const response = await fetch('/api/news');
+            const response = await fetch('/api/news', {
+                credentials: 'same-origin'
+            });
             
             console.log('📰 Response status:', response.status);
             console.log('📰 Response ok:', response.ok);
@@ -281,7 +289,9 @@ class FinancialDashboard {
 
         try {
             console.log(`🌐 Making request to /api/stocks/${symbol}...`);
-            const response = await fetch(`/api/stocks/${symbol}`);
+            const response = await fetch(`/api/stocks/${symbol}`, {
+                credentials: 'same-origin'
+            });
             
             console.log('🔍 Search response status:', response.status);
             console.log('🔍 Search response ok:', response.ok);
@@ -312,7 +322,9 @@ class FinancialDashboard {
         
         try {
             console.log(`🌐 Making request to /api/stocks/${symbol}/history?period=${period}...`);
-            const response = await fetch(`/api/stocks/${symbol}/history?period=${period}`);
+            const response = await fetch(`/api/stocks/${symbol}/history?period=${period}`, {
+                credentials: 'same-origin'
+            });
             
             console.log('📊 Chart response status:', response.status);
             console.log('📊 Chart response ok:', response.ok);
@@ -332,6 +344,34 @@ class FinancialDashboard {
         } catch (error) {
             console.error('❌ Error loading chart:', error);
             this.generateFallbackChart(symbol, period);
+        }
+        
+        // Load technical analysis for the symbol
+        await this.loadTechnicalAnalysis(symbol);
+    }
+
+    async loadTechnicalAnalysis(symbol) {
+        console.log(`📊 Loading technical analysis for ${symbol}...`);
+        
+        try {
+            const response = await fetch(`/api/technical/${symbol}`, {
+                credentials: 'same-origin'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Technical analysis not available: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('📊 Technical analysis received:', data);
+            
+            this.renderTechnicalAnalysis(data);
+            
+            console.log('✅ Technical analysis loaded successfully');
+            
+        } catch (error) {
+            console.error('❌ Error loading technical analysis:', error);
+            this.renderFallbackTechnicalAnalysis(symbol);
         }
     }
 
@@ -776,7 +816,9 @@ class FinancialDashboard {
 
         try {
             console.log('🌐 Making request to /api/fundamentals/definitions...');
-            const response = await fetch('/api/fundamentals/definitions');
+            const response = await fetch('/api/fundamentals/definitions', {
+                credentials: 'same-origin'
+            });
 
             console.log('📊 Response status:', response.status);
             console.log('📊 Response ok:', response.ok);
@@ -800,12 +842,52 @@ class FinancialDashboard {
 
     async loadTechnicalAnalysis() {
         console.log('📈 Loading technical analysis...');
-        // Implementation similar to other load methods with debug logging
+        
+        try {
+            console.log(`🌐 Making request to /api/technical/${this.currentSymbol}...`);
+            const response = await fetch(`/api/technical/${this.currentSymbol}`, {
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Technical analysis not available: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('📈 Technical analysis data:', data);
+
+            this.renderTechnicalAnalysis(data);
+            
+            console.log('✅ Technical analysis loaded successfully');
+        } catch (error) {
+            console.error('❌ Error loading technical analysis:', error);
+            this.renderFallbackTechnicalAnalysis(this.currentSymbol);
+        }
     }
 
     async loadSectorData() {
         console.log('🏢 Loading sector data...');
-        // Implementation similar to other load methods with debug logging
+        
+        try {
+            console.log('🌐 Making request to /api/sectors...');
+            const response = await fetch('/api/sectors', {
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Sector data not available: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('🏢 Sector data:', data);
+
+            this.renderSectorData(data);
+            
+            console.log('✅ Sector data loaded successfully');
+        } catch (error) {
+            console.error('❌ Error loading sector data:', error);
+            this.showError('sectorResult', 'FAILED TO LOAD SECTOR DATA - CHECK CONSOLE');
+        }
     }
 
     showDataSourceIndicator(type, source) {
@@ -854,6 +936,121 @@ class FinancialDashboard {
         if (lastUpdatedDiv) {
             lastUpdatedDiv.textContent = `LAST UPDATE: ${new Date().toLocaleTimeString()}`;
         }
+    }
+
+    markDataSourceAsLive() {
+        console.log('📊 Marking data source as LIVE');
+        // Add visual indicators that data is live
+        const indicators = document.querySelectorAll('.data-source-indicator');
+        indicators.forEach(indicator => {
+            indicator.textContent = 'LIVE';
+            indicator.className = 'data-source-indicator live-data';
+        });
+    }
+
+    markDataSourceAsDemo() {
+        console.log('📊 Marking data source as DEMO');
+        // Add visual indicators that data is demo
+        const indicators = document.querySelectorAll('.data-source-indicator');
+        indicators.forEach(indicator => {
+            indicator.textContent = 'DEMO';
+            indicator.className = 'data-source-indicator demo-data';
+        });
+    }
+
+    renderTechnicalAnalysis(data) {
+        console.log('🎨 Rendering technical analysis...');
+        const container = document.getElementById('technicalResult');
+        if (!container) {
+            console.error('❌ technicalResult element not found!');
+            return;
+        }
+
+        const { symbol, currentPrice, sma, trend, dataSource } = data;
+        
+        const html = `
+            <div class="technical-analysis">
+                <h4>Technical Analysis - ${symbol}</h4>
+                <div class="price-info">
+                    <p><strong>Current Price:</strong> $${currentPrice?.toFixed(2) || 'N/A'}</p>
+                </div>
+                <div class="sma-info">
+                    <h5>Simple Moving Averages</h5>
+                    <p><strong>SMA 20:</strong> $${sma.sma20?.toFixed(2) || 'N/A'}</p>
+                    <p><strong>SMA 50:</strong> $${sma.sma50?.toFixed(2) || 'N/A'}</p>
+                    <p><strong>SMA 200:</strong> $${sma.sma200?.toFixed(2) || 'N/A'}</p>
+                </div>
+                <div class="trend-info">
+                    <h5>Trend Analysis</h5>
+                    <p><strong>Short-term (20):</strong> <span class="trend ${trend.short}">${trend.short?.toUpperCase() || 'N/A'}</span></p>
+                    <p><strong>Medium-term (50):</strong> <span class="trend ${trend.medium}">${trend.medium?.toUpperCase() || 'N/A'}</span></p>
+                    <p><strong>Long-term (200):</strong> <span class="trend ${trend.long}">${trend.long?.toUpperCase() || 'N/A'}</span></p>
+                </div>
+                <div class="data-source-info">
+                    <small>Data Source: ${dataSource?.toUpperCase() || 'UNKNOWN'}</small>
+                </div>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+        this.showDataSourceIndicator('technical', dataSource);
+    }
+
+    renderFallbackTechnicalAnalysis(symbol) {
+        console.log('🎨 Rendering fallback technical analysis...');
+        const container = document.getElementById('technicalResult');
+        if (!container) return;
+
+        const html = `
+            <div class="technical-analysis fallback">
+                <h4>Technical Analysis - ${symbol}</h4>
+                <div class="error-message">
+                    <p>Unable to load technical analysis data.</p>
+                    <p>Please check your connection and try again.</p>
+                </div>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+    }
+
+    renderSectorData(data) {
+        console.log('🎨 Rendering sector data...');
+        const container = document.getElementById('sectorResult');
+        if (!container) {
+            console.error('❌ sectorResult element not found!');
+            return;
+        }
+
+        const { sectors, dataSource } = data;
+        
+        let html = `
+            <div class="sector-analysis">
+                <h4>Sector Analysis</h4>
+                <div class="sectors-grid">
+        `;
+        
+        Object.entries(sectors || {}).forEach(([sector, info]) => {
+            const trendClass = info.trend || 'neutral';
+            html += `
+                <div class="sector-item ${trendClass}">
+                    <div class="sector-name">${sector}</div>
+                    <div class="sector-performance">${info.performance?.toFixed(1) || 'N/A'}%</div>
+                    <div class="sector-trend">${info.trend?.toUpperCase() || 'N/A'}</div>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+                <div class="data-source-info">
+                    <small>Data Source: ${dataSource?.toUpperCase() || 'UNKNOWN'}</small>
+                </div>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+        this.showDataSourceIndicator('sectors', dataSource);
     }
 
     formatVolume(volume) {
@@ -924,12 +1121,24 @@ class FinancialDashboard {
         await this.checkAPIHealth();
 
         try {
-            const tokenRes = await fetch('/api/tiingo/token');
+            const tokenRes = await fetch('/api/tiingo/token', {
+                credentials: 'same-origin'
+            });
             const { token } = await tokenRes.json();
             const tickers = Object.keys(this.watchlistData || {}).join(',');
 
-            if (!token || !tickers) {
-                console.warn('⚠️ WebSocket disabled - missing token or tickers');
+            // Skip WebSocket connection if no Tiingo token is present
+            if (!token) {
+                console.log('🔌 Skipping WebSocket - no Tiingo token configured (demo mode)');
+                if (wsStatus) wsStatus.textContent = 'DEMO MODE';
+                const statusDot = document.querySelector('.status-dot');
+                if (statusDot) statusDot.className = 'status-dot status-demo';
+                this.markDataSourceAsDemo();
+                return;
+            }
+
+            if (!tickers) {
+                console.warn('⚠️ WebSocket disabled - no tickers available');
                 if (wsStatus) wsStatus.textContent = 'OFFLINE';
                 const statusDot = document.querySelector('.status-dot');
                 if (statusDot) statusDot.className = 'status-dot status-disconnected';
@@ -941,9 +1150,10 @@ class FinancialDashboard {
             this.webSocket = ws;
 
             ws.onopen = () => {
-                if (wsStatus) wsStatus.textContent = 'ONLINE';
+                if (wsStatus) wsStatus.textContent = 'LIVE FEED';
                 const statusDot = document.querySelector('.status-dot');
                 if (statusDot) statusDot.className = 'status-dot status-connected';
+                this.markDataSourceAsLive();
                 console.log('✅ WebSocket connected');
             };
 
@@ -986,7 +1196,9 @@ class FinancialDashboard {
         console.log('🏥 Checking API health...');
         
         try {
-            const response = await fetch('/api/health');
+            const response = await fetch('/api/health', {
+                credentials: 'same-origin'
+            });
             const health = await response.json();
             
             console.log('🏥 API Health Check Results:', health);

@@ -501,6 +501,111 @@ app.get('/api/news', async (req, res) => {
 });
 
 /* ---------------------------
+   Technical Analysis
+--------------------------- */
+
+// Helper function to calculate Simple Moving Average
+function calculateSMA(prices, period) {
+  if (!prices || prices.length < period) return null;
+  const values = prices.slice(-period);
+  const sum = values.reduce((acc, price) => acc + (price.close || price.adjClose || 0), 0);
+  return sum / period;
+}
+
+// Basic technical analysis with SMA fallback
+app.get('/api/technical/:symbol', async (req, res) => {
+  const { symbol } = req.params;
+  const { period = '1M' } = req.query;
+  
+  try {
+    // Get historical data
+    const end = new Date();
+    const start = new Date(end);
+    start.setMonth(end.getMonth() - 3); // Get 3 months for better SMA calculation
+    
+    const r = await tiingo.get(`/tiingo/daily/${encodeURIComponent(symbol)}/prices`, {
+      params: {
+        startDate: start.toISOString().slice(0, 10),
+        endDate: end.toISOString().slice(0, 10),
+        resampleFreq: 'daily',
+      },
+    });
+    
+    const prices = r.data || [];
+    if (prices.length === 0) {
+      return res.status(404).json({ error: 'No historical data available' });
+    }
+    
+    // Calculate technical indicators
+    const sma20 = calculateSMA(prices, 20);
+    const sma50 = calculateSMA(prices, 50);
+    const sma200 = calculateSMA(prices, 200);
+    
+    const currentPrice = prices[prices.length - 1]?.close || prices[prices.length - 1]?.adjClose;
+    
+    res.json({
+      symbol,
+      currentPrice,
+      sma: {
+        sma20,
+        sma50,
+        sma200,
+      },
+      trend: {
+        short: sma20 ? (currentPrice > sma20 ? 'bullish' : 'bearish') : 'neutral',
+        medium: sma50 ? (currentPrice > sma50 ? 'bullish' : 'bearish') : 'neutral',
+        long: sma200 ? (currentPrice > sma200 ? 'bullish' : 'bearish') : 'neutral',
+      },
+      dataSource: 'tiingo',
+    });
+  } catch (err) {
+    const status = err?.response?.status;
+    console.error('Technical analysis error:', status, err?.message);
+    
+    // Fallback demo technical analysis
+    res.json({
+      symbol,
+      currentPrice: DEMO_STOCKS[symbol]?.price || 100,
+      sma: {
+        sma20: 95,
+        sma50: 90,
+        sma200: 85,
+      },
+      trend: {
+        short: 'bullish',
+        medium: 'bullish', 
+        long: 'bullish',
+      },
+      dataSource: 'demo',
+    });
+  }
+});
+
+/* ---------------------------
+   Sector Analysis (Placeholder)
+--------------------------- */
+
+// Placeholder for sector analysis
+app.get('/api/sectors', async (req, res) => {
+  // Demo sector data for now
+  const sectorData = {
+    'Technology': { performance: 2.3, trend: 'bullish' },
+    'Healthcare': { performance: 1.8, trend: 'bullish' },
+    'Financial': { performance: -0.5, trend: 'bearish' },
+    'Energy': { performance: 3.1, trend: 'bullish' },
+    'Consumer': { performance: 0.8, trend: 'neutral' },
+    'Industrial': { performance: 1.2, trend: 'bullish' },
+    'Utilities': { performance: -0.2, trend: 'neutral' },
+    'Materials': { performance: 1.5, trend: 'bullish' },
+  };
+  
+  res.json({
+    sectors: sectorData,
+    dataSource: TIINGO_API_KEY ? 'demo' : 'demo', // Placeholder - would use real data when available
+  });
+});
+
+/* ---------------------------
    404 + error handlers
 --------------------------- */
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));

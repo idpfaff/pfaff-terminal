@@ -5,6 +5,7 @@ class FinancialDashboard {
         this.realtimeUpdateCount = 0;
         this.currentSymbol = 'AAPL';
         this.currentPeriod = '1M';
+        this.watchlistData = {};
         
         // Debug logging
         console.log('🔍 PFAFF TERMINAL DEBUG MODE ACTIVE');
@@ -13,7 +14,6 @@ class FinancialDashboard {
         this.init();
         this.setupEventListeners();
         this.startAutoRefresh();
-        this.initializeWebSocket();
     }
 
     async init() {
@@ -25,15 +25,20 @@ class FinancialDashboard {
             
             console.log('💰 Loading crypto data...');
             await this.loadCryptoData();
-            
+
+            console.log('💱 Loading forex data...');
+            await this.loadForexData();
+
             console.log('📰 Loading news...');
             await this.loadNews();
             
             console.log('📊 Loading default chart...');
             await this.loadDefaultChart();
-            
+
             this.updateLastUpdatedTime();
             console.log('✅ Dashboard initialization complete!');
+
+            await this.initializeWebSocket();
         } catch (error) {
             console.error('❌ Dashboard initialization failed:', error);
         }
@@ -177,6 +182,38 @@ class FinancialDashboard {
         }
     }
 
+    async loadForexData() {
+        console.log('💱 Starting forex data fetch...');
+
+        try {
+            console.log('🌐 Making request to /api/fx...');
+            const response = await fetch('/api/fx');
+
+            console.log('💱 Response status:', response.status);
+            console.log('💱 Response ok:', response.ok);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            console.log('💱 Raw forex API response:', data);
+            console.log('💱 Data source:', data.dataSource);
+            console.log('💱 Forex count:', Object.keys(data.fx || {}).length);
+
+            this.renderForexList(data.fx);
+            this.showDataSourceIndicator('forex', data.dataSource);
+
+            console.log('✅ Forex data loaded successfully');
+
+        } catch (error) {
+            console.error('❌ Error loading forex data:', error);
+            console.error('❌ Error stack:', error.stack);
+            this.showError('forexList', 'FAILED TO LOAD FOREX DATA - CHECK CONSOLE');
+        }
+    }
+
     async loadNews() {
         console.log('📰 Starting news data fetch...');
         
@@ -309,7 +346,9 @@ class FinancialDashboard {
         
         console.log('🎨 stockList element found:', stockList);
         console.log('🎨 Stocks data to render:', stocks);
-        
+
+        this.watchlistData = { ...(stocks || {}) };
+
         if (!stocks || Object.keys(stocks).length === 0) {
             console.log('⚠️ No stocks data, showing loading message');
             stockList.innerHTML = '<div class="loading">LOADING PFAFF MARKET DATA</div>';
@@ -408,6 +447,37 @@ class FinancialDashboard {
 
         cryptoList.innerHTML = cryptoHtml;
         console.log('✅ Crypto list rendered successfully');
+    }
+
+    renderForexList(fx) {
+        console.log('🎨 Rendering forex list...');
+        const forexList = document.getElementById('forexList');
+
+        if (!forexList) {
+            console.error('❌ forexList element not found!');
+            return;
+        }
+
+        if (!fx || Object.keys(fx).length === 0) {
+            console.log('⚠️ No forex data, showing loading message');
+            forexList.innerHTML = '<div class="loading">LOADING FOREX DATA</div>';
+            return;
+        }
+
+        const fxHtml = Object.values(fx).map(pair => {
+            const spread = (pair.ask ?? 0) - (pair.bid ?? 0);
+            return `
+                <div class="watchlist-item data-update" data-symbol="${pair.symbol}">
+                    <span class="symbol">${pair.symbol}</span>
+                    <span class="price">${parseFloat(pair.price).toFixed(4)}</span>
+                    <span class="change">${spread ? spread.toFixed(4) : 'N/A'}</span>
+                    <span class="volume">${pair.bid && pair.ask ? pair.bid.toFixed(4) + '/' + pair.ask.toFixed(4) : 'N/A'}</span>
+                </div>
+            `;
+        }).join('');
+
+        forexList.innerHTML = fxHtml;
+        console.log('✅ Forex list rendered successfully');
     }
 
     renderMarketSummary(stocks) {
@@ -703,7 +773,29 @@ class FinancialDashboard {
 
     async loadFundamentals() {
         console.log('📊 Loading fundamentals...');
-        // Implementation similar to other load methods with debug logging
+
+        try {
+            console.log('🌐 Making request to /api/fundamentals/definitions...');
+            const response = await fetch('/api/fundamentals/definitions');
+
+            console.log('📊 Response status:', response.status);
+            console.log('📊 Response ok:', response.ok);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('📊 Fundamentals data:', data);
+
+            const container = document.getElementById('fundamentalsResult');
+            if (container) {
+                container.innerHTML = `<pre>${JSON.stringify(data.slice(0, 10), null, 2)}</pre>`;
+            }
+        } catch (error) {
+            console.error('❌ Error loading fundamentals:', error);
+            this.showError('fundamentalsResult', 'FAILED TO LOAD FUNDAMENTALS - CHECK CONSOLE');
+        }
     }
 
     async loadTechnicalAnalysis() {
@@ -790,40 +882,91 @@ class FinancialDashboard {
         return value.toLocaleString();
     }
 
-    handleRealtimeUpdate(data) {
+    handleRealtimeUpdate(update) {
         this.realtimeUpdateCount++;
-        
-        const symbolElement = document.querySelector(`[data-symbol="${data.symbol}"]`);
-        if (symbolElement) {
-            symbolElement.classList.add('data-update');
-            setTimeout(() => {
-                symbolElement.classList.remove('data-update');
-            }, 500);
+        const { symbol, price } = update;
+        if (!symbol || price == null) return;
+
+        const data = this.watchlistData[symbol];
+        if (data) {
+            const prevClose = data.close ?? (data.price - data.change);
+            data.price = price;
+            if (prevClose != null) {
+                data.change = price - prevClose;
+            }
+
+            const row = document.querySelector(`[data-symbol="${symbol}"]`);
+            if (row) {
+                const priceEl = row.querySelector('.price');
+                const changeEl = row.querySelector('.change');
+                if (priceEl) priceEl.textContent = price.toFixed(2);
+                if (changeEl && !isNaN(data.change)) {
+                    const changeClass = data.change >= 0 ? 'positive' : 'negative';
+                    changeEl.className = `change ${changeClass}`;
+                    changeEl.textContent = `${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)}`;
+                }
+                row.classList.add('data-update');
+                setTimeout(() => row.classList.remove('data-update'), 500);
+            }
         }
     }
 
-    initializeWebSocket() {
+    async initializeWebSocket() {
         console.log('🔌 Initializing WebSocket connection...');
-        
+
         this.updateTime();
         setInterval(() => this.updateTime(), 1000);
-        
+
         const wsStatus = document.getElementById('wsStatus');
-        if (wsStatus) {
-            wsStatus.textContent = 'CONNECTING...';
+        if (wsStatus) wsStatus.textContent = 'CONNECTING...';
+
+        await this.checkAPIHealth();
+
+        try {
+            const tokenRes = await fetch('/api/tiingo/token');
+            const { token } = await tokenRes.json();
+            const tickers = Object.keys(this.watchlistData || {}).join(',');
+            const url = `wss://api.tiingo.com/iex?tickers=${tickers}&token=${token}&thresholdLevel=5`;
+            const ws = new WebSocket(url);
+            this.webSocket = ws;
+
+            ws.onopen = () => {
+                if (wsStatus) wsStatus.textContent = 'ONLINE';
+                const statusDot = document.querySelector('.status-dot');
+                if (statusDot) statusDot.className = 'status-dot status-connected';
+                console.log('✅ WebSocket connected');
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (Array.isArray(msg.data)) {
+                        msg.data.forEach((arr) => {
+                            const symbol = arr[1];
+                            const price = arr[2];
+                            if (symbol && price != null) {
+                                this.handleRealtimeUpdate({ symbol, price });
+                            }
+                        });
+                    }
+                } catch (err) {
+                    console.error('❌ Error parsing websocket message:', err);
+                }
+            };
+
+            ws.onerror = (err) => {
+                console.error('❌ WebSocket error:', err);
+            };
+
+            ws.onclose = () => {
+                if (wsStatus) wsStatus.textContent = 'OFFLINE';
+                const statusDot = document.querySelector('.status-dot');
+                if (statusDot) statusDot.className = 'status-dot status-disconnected';
+                console.log('⚠️ WebSocket disconnected');
+            };
+        } catch (error) {
+            console.error('❌ WebSocket initialization failed:', error);
         }
-        
-        this.checkAPIHealth();
-        
-        setTimeout(() => {
-            const wsStatus = document.getElementById('wsStatus');
-            const statusDot = document.querySelector('.status-dot');
-            
-            if (wsStatus) wsStatus.textContent = 'ONLINE';
-            if (statusDot) statusDot.className = 'status-dot status-connected';
-            
-            console.log('✅ WebSocket status updated to ONLINE');
-        }, 2000);
     }
 
     async checkAPIHealth() {
@@ -850,6 +993,7 @@ class FinancialDashboard {
             console.log('🔄 Auto-refreshing market data...');
             this.loadMarketData();
             this.loadCryptoData();
+            this.loadForexData();
             this.updateLastUpdatedTime();
         }, 2 * 60 * 1000);
 
@@ -888,8 +1032,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Check for critical DOM elements
     const criticalElements = [
-        'stockList', 'etfList', 'cryptoList', 'newsList', 'marketSummary', 
-        'priceChart', 'searchResult', 'currentTime', 'wsStatus'
+        'stockList', 'etfList', 'cryptoList', 'forexList', 'newsList', 'marketSummary',
+        'priceChart', 'searchResult', 'fundamentalsResult', 'currentTime', 'wsStatus'
     ];
     
     console.log('🔍 Checking for critical DOM elements:');
